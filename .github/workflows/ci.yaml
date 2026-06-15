@@ -1,0 +1,14 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    uses: NUS-MTech-Capstone/github-actions-shared/.github/workflows/node-ci.yaml@main
+    with:
+      node-version: "22"
+      test-command: npm test -- --runInBand
+      build-command: npm run build
