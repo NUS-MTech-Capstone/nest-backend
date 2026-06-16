@@ -20,13 +20,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev --prefer-offline
 
-# Non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Non-root user for security. Use numeric IDs so Kubernetes can verify runAsNonRoot.
+RUN addgroup -S -g 10001 appgroup && adduser -S -D -H -u 10001 -G appgroup appuser
 
 # Copy compiled output from builder
-COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=10001:10001 /app/dist ./dist
 
-USER appuser
+USER 10001:10001
 
 EXPOSE 3000
 
