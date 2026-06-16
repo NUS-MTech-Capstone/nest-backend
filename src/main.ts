@@ -27,7 +27,7 @@ function configureCors(app: INestApplication): void {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 }
-
+ 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   validateRuntimeConfig();
