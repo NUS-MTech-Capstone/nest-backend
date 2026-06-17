@@ -48,6 +48,12 @@ npm run build
 Use `.env.example` as the configuration reference. Local development may use
 the individual `DB_*` settings. Production must use `DATABASE_URL`.
 
+Apply migrations before starting the backend locally or in production:
+
+```bash
+npm run migrate
+```
+
 ## Database Migrations
 
 Sequelize model synchronization is disabled. Apply versioned migrations before
@@ -57,8 +63,10 @@ rolling out a new backend image:
 DATABASE_URL='postgres://...' DB_SSL=true npm run migrate
 ```
 
-The initial migration creates the current domain tables, foreign keys, the
-membership uniqueness constraint, and the six default access policies.
+Versioned migrations create all domain tables. The initial migration seeds the
+six default access policies and creates SSH session tracking and alert event
+history tables. Apply migrations before starting the app in any shared or
+production environment.
 
 ## Container
 

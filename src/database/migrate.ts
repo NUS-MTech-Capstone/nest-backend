@@ -2,10 +2,10 @@ import 'dotenv/config';
 import { Sequelize } from 'sequelize';
 import { SequelizeStorage, Umzug } from 'umzug';
 import { buildSequelizeOptions } from '../config/database.config';
-import { validateRuntimeConfig } from '../config/runtime.config';
+import { validateMigrationConfig } from '../config/runtime.config';
 
 async function migrate(): Promise<void> {
-  validateRuntimeConfig();
+  validateMigrationConfig();
   const databaseUrl = process.env.DATABASE_URL;
   const sequelize = databaseUrl
     ? new Sequelize(databaseUrl, buildSequelizeOptions())

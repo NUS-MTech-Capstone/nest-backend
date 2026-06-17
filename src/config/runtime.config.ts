@@ -5,6 +5,16 @@ const ALB_REQUIRED_ENV = [
   'COGNITO_CLIENT_ID',
 ] as const;
 
+export function validateMigrationConfig(): void {
+  if (process.env.NODE_ENV !== 'production') {
+    return;
+  }
+
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required in production');
+  }
+}
+
 export function validateRuntimeConfig(): void {
   const authMode = process.env.AUTH_MODE ?? 'dev';
   if (authMode !== 'dev' && authMode !== 'alb') {
@@ -15,9 +25,7 @@ export function validateRuntimeConfig(): void {
     return;
   }
 
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is required in production');
-  }
+  validateMigrationConfig();
   if (authMode !== 'alb') {
     throw new Error('AUTH_MODE=alb is required in production');
   }

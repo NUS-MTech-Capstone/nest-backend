@@ -1,5 +1,5 @@
+import { INestApplication, RequestMethod } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -14,19 +14,25 @@ describe('AppController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix(SERVICE_NAME, {
+      exclude: [
+        { path: 'healthz', method: RequestMethod.GET },
+        { path: 'readyz', method: RequestMethod.GET },
+      ],
+    });
     await app.init();
   });
 
-  it(`GET /${SERVICE_NAME}/health`, () => {
+  it('GET /healthz', () => {
     return request(app.getHttpServer())
-      .get(`/${SERVICE_NAME}/health`)
+      .get('/healthz')
       .expect(200)
       .expect({ status: 'ok', service: SERVICE_NAME });
   });
 
-  it(`GET /${SERVICE_NAME}/ready`, () => {
+  it('GET /readyz', () => {
     return request(app.getHttpServer())
-      .get(`/${SERVICE_NAME}/ready`)
+      .get('/readyz')
       .expect(200)
       .expect({ status: 'ready', service: SERVICE_NAME });
   });

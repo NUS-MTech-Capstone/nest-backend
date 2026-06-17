@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getConnectionToken } from '@nestjs/sequelize';
 import { HealthController } from './health.controller';
@@ -5,46 +6,48 @@ import { SERVICE_NAME } from '../common/service.constants';
 
 describe('HealthController', () => {
   let controller: HealthController;
-  let authenticate: jest.Mock;
+  let query: jest.Mock;
 
   beforeEach(async () => {
-    authenticate = jest.fn().mockResolvedValue(undefined);
+    query = jest.fn().mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [HealthController],
       providers: [
         {
           provide: getConnectionToken(),
-          useValue: { authenticate },
+          useValue: { query },
         },
       ],
     }).compile();
 
-    controller = module.get<HealthController>(HealthController);
+    controller = module.get(HealthController);
   });
 
-  describe('health', () => {
+  describe('healthz', () => {
     it('returns ok status and service name', () => {
-      expect(controller.health()).toEqual({
+      expect(controller.healthz()).toEqual({
         status: 'ok',
         service: SERVICE_NAME,
       });
     });
   });
 
-  describe('ready', () => {
-    it('authenticates sequelize and returns ready status', async () => {
-      await expect(controller.ready()).resolves.toEqual({
+  describe('readyz', () => {
+    it('executes SELECT 1 and returns ready status', async () => {
+      await expect(controller.readyz()).resolves.toEqual({
         status: 'ready',
         service: SERVICE_NAME,
       });
-      expect(authenticate).toHaveBeenCalledTimes(1);
+      expect(query).toHaveBeenCalledWith('SELECT 1');
     });
 
-    it('propagates sequelize authentication errors', async () => {
-      authenticate.mockRejectedValue(new Error('connection failed'));
+    it('returns 503 when PostgreSQL is unavailable', async () => {
+      query.mockRejectedValue(new Error('connection failed'));
 
-      await expect(controller.ready()).rejects.toThrow('connection failed');
+      await expect(controller.readyz()).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
     });
   });
 });

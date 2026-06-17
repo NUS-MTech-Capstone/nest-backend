@@ -31,6 +31,11 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
     },
     osVersion: { type: DataTypes.TEXT, allowNull: false },
     sshPort: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 22 },
+    tags: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
     ...timestamps,
   });
 
@@ -85,6 +90,7 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
       allowNull: false,
       defaultValue: [],
     },
+    scheduledDate: { type: DataTypes.DATE, allowNull: true },
     ...timestamps,
   });
 
@@ -185,11 +191,71 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
     fields: ['username', 'implementerGroupId', 'status'],
   });
 
+  await context.createTable('access_sessions', {
+    id: {
+      type: DataTypes.UUID,
+      primaryKey: true,
+      allowNull: false,
+    },
+    hostId: { type: DataTypes.TEXT, allowNull: false },
+    hostname: { type: DataTypes.TEXT, allowNull: false },
+    ipAddress: { type: DataTypes.TEXT, allowNull: true },
+    sshPort: { type: DataTypes.INTEGER, allowNull: true },
+    crId: { type: DataTypes.UUID, allowNull: true },
+    crNumber: { type: DataTypes.TEXT, allowNull: true },
+    osUser: { type: DataTypes.TEXT, allowNull: false },
+    createdBy: { type: DataTypes.TEXT, allowNull: false },
+    status: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: 'active',
+    },
+    sessionToken: { type: DataTypes.TEXT, allowNull: true },
+    websocketUrl: { type: DataTypes.TEXT, allowNull: true },
+    scopedJwt: { type: DataTypes.TEXT, allowNull: true },
+    startedAt: { type: DataTypes.DATE, allowNull: false },
+    endedAt: { type: DataTypes.DATE, allowNull: true },
+    lastActivityAt: { type: DataTypes.DATE, allowNull: true },
+    ...timestamps,
+  });
+  await context.addIndex('access_sessions', {
+    name: 'access_sessions_active_host',
+    fields: ['status', 'hostId'],
+  });
+  await context.addIndex('access_sessions', {
+    name: 'access_sessions_created_by_started',
+    fields: ['createdBy', 'startedAt'],
+  });
+
+  await context.createTable('alert_events', {
+    id: {
+      type: DataTypes.UUID,
+      primaryKey: true,
+      allowNull: false,
+    },
+    alarmName: { type: DataTypes.TEXT, allowNull: false },
+    state: { type: DataTypes.TEXT, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
+    metric: { type: DataTypes.TEXT, allowNull: false },
+    source: { type: DataTypes.TEXT, allowNull: false },
+    triggeredAt: { type: DataTypes.DATE, allowNull: false },
+    rawPayload: { type: DataTypes.JSONB, allowNull: true },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: literal('CURRENT_TIMESTAMP'),
+    },
+  });
+  await context.addIndex('alert_events', {
+    name: 'alert_events_triggered_at',
+    fields: ['triggeredAt'],
+  });
+
   await context.bulkInsert(
     'access_policies',
     ROLES.map((role) => ({
       role,
-      permissions: JSON.stringify(DEFAULT_POLICY_MATRIX[role]),
+      permissions: DEFAULT_POLICY_MATRIX[role],
       createdAt: new Date(),
       updatedAt: new Date(),
     })),
@@ -197,6 +263,8 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
 };
 
 export const down: MigrationFn<QueryInterface> = async ({ context }) => {
+  await context.dropTable('alert_events');
+  await context.dropTable('access_sessions');
   await context.dropTable('implementerGroupMembershipRequests');
   await context.dropTable('implementerGroupMembers');
   await context.dropTable('access_policies');
