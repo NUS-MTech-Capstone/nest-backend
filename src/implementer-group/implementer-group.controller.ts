@@ -33,11 +33,8 @@ export class ImplementerGroupController {
 
   @Post('membership-requests')
   @RequirePermission('identity.users.manage')
-  createMembershipRequest(
-    @Body() dto: CreateMembershipRequestDto,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.membershipService.createRequest(dto, user.username);
+  createMembershipRequest(@Body() dto: CreateMembershipRequestDto) {
+    return this.membershipService.createRequest(dto);
   }
 
   @Patch('membership-requests/:id/approve')
@@ -46,7 +43,10 @@ export class ImplementerGroupController {
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.membershipService.approve(id, user.name || user.username);
+    return this.membershipService.approve(
+      id,
+      user.name || user.username,
+    );
   }
 
   @Patch('membership-requests/:id/reject')
@@ -55,7 +55,10 @@ export class ImplementerGroupController {
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.membershipService.reject(id, user.name || user.username);
+    return this.membershipService.reject(
+      id,
+      user.name || user.username,
+    );
   }
 
   @Get(':id/members')
@@ -66,7 +69,10 @@ export class ImplementerGroupController {
 
   @Delete(':id/members/:username')
   @RequirePermission('identity.users.manage')
-  removeMember(@Param('id') id: string, @Param('username') username: string) {
+  removeMember(
+    @Param('id') id: string,
+    @Param('username') username: string,
+  ) {
     return this.membershipService.removeMember(id, username);
   }
 
@@ -103,10 +109,7 @@ export class ImplementerGroupController {
 
   @Patch(':id')
   @RequirePermission('identity.users.manage')
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateImplementerGroupDto,
-  ) {
+  async update(@Param('id') id: string, @Body() dto: UpdateImplementerGroupDto) {
     const updated = await this.implementerGroupService.update(id, dto);
     if (!updated) {
       throw new NotFoundException(`Implementer group ${id} not found`);

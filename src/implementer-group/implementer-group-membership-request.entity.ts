@@ -67,12 +67,7 @@ export class ImplementerGroupMembershipRequest extends Model<
   @Column({ type: DataType.TEXT, allowNull: true, field: 'approver' })
   approver?: string;
 
-  @Column({
-    type: DataType.JSONB,
-    allowNull: false,
-    defaultValue: [],
-    field: 'history',
-  })
+  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [], field: 'history' })
   history: ApprovalHistoryItem[];
 
   @CreatedAt

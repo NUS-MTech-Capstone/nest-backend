@@ -35,11 +35,7 @@ export class ImplementerGroupMembershipRepository {
     implementerGroupId: string,
   ): Promise<ImplementerGroupMembershipRequest | null> {
     return this.requestModel.findOne({
-      where: {
-        username,
-        implementerGroupId,
-        status: MembershipRequestStatus.Pending,
-      },
+      where: { username, implementerGroupId, status: MembershipRequestStatus.Pending },
     });
   }
 
@@ -68,9 +64,7 @@ export class ImplementerGroupMembershipRepository {
     username: string,
     implementerGroupId: string,
   ): Promise<ImplementerGroupMember | null> {
-    return this.memberModel.findOne({
-      where: { username, implementerGroupId },
-    });
+    return this.memberModel.findOne({ where: { username, implementerGroupId } });
   }
 
   createMember(
@@ -81,9 +75,7 @@ export class ImplementerGroupMembershipRepository {
   }
 
   removeMember(username: string, implementerGroupId: string): Promise<number> {
-    return this.memberModel.destroy({
-      where: { username, implementerGroupId },
-    });
+    return this.memberModel.destroy({ where: { username, implementerGroupId } });
   }
 
   findMembershipsForUser(username: string): Promise<ImplementerGroupMember[]> {

@@ -25,25 +25,13 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    if (this.tokenService.mode === 'alb') {
-      const claimsToken = request.headers['x-amzn-oidc-data'];
-      const accessToken = request.headers['x-amzn-oidc-accesstoken'];
-      if (typeof claimsToken !== 'string' || typeof accessToken !== 'string') {
-        throw new UnauthorizedException('Missing ALB identity headers');
-      }
-      request.user = await this.tokenService.verifyAlbHeaders(
-        claimsToken,
-        accessToken,
-      );
-      return true;
-    }
-
     const header: string = request.headers['authorization'] || '';
     const [scheme, token] = header.split(' ');
     if (scheme !== 'Bearer' || !token) {
       throw new UnauthorizedException('Missing bearer token');
     }
-    request.user = await this.tokenService.verifyDevToken(token);
+
+    request.user = await this.tokenService.verify(token);
     return true;
   }
 }

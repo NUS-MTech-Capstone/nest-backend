@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import {
   DEFAULT_POLICY_MATRIX,
@@ -64,10 +59,7 @@ export class PolicyService implements OnModuleInit {
     const rows = await this.accessPolicyModel.findAll({
       order: [['role', 'ASC']],
     });
-    return rows.map((row) => ({
-      role: row.role,
-      permissions: row.permissions,
-    }));
+    return rows.map((row) => ({ role: row.role, permissions: row.permissions }));
   }
 
   async updateMatrix(policies: PolicyRow[]): Promise<PolicyRow[]> {
@@ -100,6 +92,11 @@ export class PolicyService implements OnModuleInit {
     if (!roles || roles.length === 0) {
       return new Set();
     }
+
+    if (roles.includes('Admin')) {
+      return new Set(PERMISSIONS);
+    }
+
     const rows = await this.accessPolicyModel.findAll({
       where: { role: roles },
     });

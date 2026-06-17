@@ -25,12 +25,16 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    const user: AuthUser | undefined = context.switchToHttp().getRequest().user;
+    const user: AuthUser | undefined = context
+      .switchToHttp()
+      .getRequest().user;
     if (!user) {
       throw new ForbiddenException('No authenticated user');
     }
 
-    const granted = await this.policyService.getPermissionsForRoles(user.roles);
+    const granted = await this.policyService.getPermissionsForRoles(
+      user.roles,
+    );
     if (!granted.has(permission)) {
       throw new ForbiddenException(`Missing permission: ${permission}`);
     }

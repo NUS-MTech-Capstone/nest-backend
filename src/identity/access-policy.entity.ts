@@ -12,10 +12,7 @@ export interface AccessPolicyCreationAttrs {
 }
 
 @Table({ tableName: 'access_policies', timestamps: true })
-export class AccessPolicy extends Model<
-  AccessPolicy,
-  AccessPolicyCreationAttrs
-> {
+export class AccessPolicy extends Model<AccessPolicy, AccessPolicyCreationAttrs> {
   @PrimaryKey
   @Column({ type: DataType.TEXT })
   declare role: string;

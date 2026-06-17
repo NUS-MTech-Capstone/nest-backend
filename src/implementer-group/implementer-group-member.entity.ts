@@ -18,13 +18,6 @@ export interface ImplementerGroupMemberCreationAttrs {
   tableName: 'implementerGroupMembers',
   timestamps: true,
   underscored: false,
-  indexes: [
-    {
-      unique: true,
-      fields: ['username', 'implementerGroupId'],
-      name: 'implementer_group_members_user_group_unique',
-    },
-  ],
 })
 export class ImplementerGroupMember extends Model<
   ImplementerGroupMember,

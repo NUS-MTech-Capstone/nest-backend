@@ -2,7 +2,6 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { InventoryChangeRequestController } from './inventory-change-request.controller';
 import { InventoryChangeRequestService } from './inventory-change-request.service';
-import type { AuthUser } from '../auth/auth.types';
 
 describe('InventoryChangeRequestController', () => {
   let controller: InventoryChangeRequestController;
@@ -12,12 +11,6 @@ describe('InventoryChangeRequestController', () => {
     create: jest.Mock;
     approve: jest.Mock;
     reject: jest.Mock;
-  };
-  const user: AuthUser = {
-    sub: 'user-1',
-    username: 'alice',
-    name: 'Alice',
-    roles: ['Employee'],
   };
 
   beforeEach(async () => {
@@ -69,24 +62,20 @@ describe('InventoryChangeRequestController', () => {
     const created = { id: 'icr-1', ...dto };
     inventoryChangeRequestService.create.mockReturnValue(created);
 
-    expect(controller.create(dto as never, user)).toBe(created);
-    expect(inventoryChangeRequestService.create).toHaveBeenCalledWith(
-      dto,
-      user.username,
-    );
+    expect(controller.create(dto as never)).toBe(created);
   });
 
   it('approve returns approved request', async () => {
     const approved = { id: 'icr-1', status: 'Approved' };
     inventoryChangeRequestService.approve.mockResolvedValue(approved);
 
-    await expect(controller.approve('icr-1', user)).resolves.toBe(approved);
+    await expect(controller.approve('icr-1')).resolves.toBe(approved);
   });
 
   it('approve throws when request is missing', async () => {
     inventoryChangeRequestService.approve.mockResolvedValue(null);
 
-    await expect(controller.approve('missing', user)).rejects.toThrow(
+    await expect(controller.approve('missing')).rejects.toThrow(
       NotFoundException,
     );
   });
@@ -95,6 +84,6 @@ describe('InventoryChangeRequestController', () => {
     const rejected = { id: 'icr-1', status: 'Rejected' };
     inventoryChangeRequestService.reject.mockResolvedValue(rejected);
 
-    await expect(controller.reject('icr-1', user)).resolves.toBe(rejected);
+    await expect(controller.reject('icr-1')).resolves.toBe(rejected);
   });
 });

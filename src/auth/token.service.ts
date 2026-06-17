@@ -3,49 +3,31 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AlbJwtVerifier, CognitoJwtVerifier } from 'aws-jwt-verify';
+import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import * as jwt from 'jsonwebtoken';
 import { DEV_USERS } from './auth.constants';
 import { AuthUser } from './auth.types';
 
-export type AuthMode = 'alb' | 'dev';
+export type AuthMode = 'cognito' | 'dev';
 
 @Injectable()
 export class TokenService {
-  readonly mode: AuthMode = process.env.AUTH_MODE === 'alb' ? 'alb' : 'dev';
+  readonly mode: AuthMode =
+    process.env.AUTH_MODE === 'cognito' ? 'cognito' : 'dev';
 
   private readonly devSecret =
     process.env.DEV_JWT_SECRET || 'dev-secret-change-me';
 
-  private albVerifier?: ReturnType<typeof AlbJwtVerifier.create>;
   private cognitoVerifier?: ReturnType<typeof CognitoJwtVerifier.create>;
-
-  private getAlbVerifier() {
-    if (!this.albVerifier) {
-      const region = process.env.AWS_REGION;
-      const userPoolId = process.env.COGNITO_USER_POOL_ID;
-      const clientId = process.env.COGNITO_CLIENT_ID;
-      const albArn = process.env.ALB_ARN;
-      if (!region || !userPoolId || !clientId || !albArn) {
-        throw new Error('ALB authentication configuration is incomplete');
-      }
-      this.albVerifier = AlbJwtVerifier.create({
-        albArn,
-        issuer:
-          process.env.COGNITO_ISSUER ??
-          `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
-        clientId,
-      });
-    }
-    return this.albVerifier;
-  }
 
   private getCognitoVerifier() {
     if (!this.cognitoVerifier) {
       const userPoolId = process.env.COGNITO_USER_POOL_ID;
       const clientId = process.env.COGNITO_CLIENT_ID;
       if (!userPoolId || !clientId) {
-        throw new Error('Cognito authentication configuration is incomplete');
+        throw new Error(
+          'COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID must be set when AUTH_MODE=cognito',
+        );
       }
       this.cognitoVerifier = CognitoJwtVerifier.create({
         userPoolId,
@@ -56,7 +38,20 @@ export class TokenService {
     return this.cognitoVerifier;
   }
 
-  async verifyDevToken(token: string): Promise<AuthUser> {
+  async verify(token: string): Promise<AuthUser> {
+    if (this.mode === 'cognito') {
+      try {
+        const payload = await this.getCognitoVerifier().verify(token);
+        return {
+          sub: payload.sub,
+          username: (payload['username'] as string) || payload.sub,
+          roles: (payload['cognito:groups'] as string[]) || [],
+        };
+      } catch {
+        throw new UnauthorizedException('Invalid or expired token');
+      }
+    }
+
     try {
       const payload = jwt.verify(token, this.devSecret) as jwt.JwtPayload;
       return {
@@ -71,37 +66,11 @@ export class TokenService {
     }
   }
 
-  async verifyAlbHeaders(
-    claimsToken: string,
-    accessToken: string,
-  ): Promise<AuthUser> {
-    try {
-      const [claims, access] = await Promise.all([
-        this.getAlbVerifier().verify(claimsToken),
-        this.getCognitoVerifier().verify(accessToken),
-      ]);
-      if (!claims.sub || claims.sub !== access.sub) {
-        throw new Error('ALB and Cognito subjects do not match');
-      }
-
-      return {
-        sub: claims.sub,
-        username:
-          (claims['username'] as string | undefined) ??
-          (access['username'] as string | undefined) ??
-          claims.sub,
-        email: claims['email'] as string | undefined,
-        name: claims['name'] as string | undefined,
-        roles: (access['cognito:groups'] as string[] | undefined) ?? [],
-      };
-    } catch {
-      throw new UnauthorizedException('Invalid or expired ALB identity');
-    }
-  }
-
   issueDevToken(username: string): { accessToken: string; user: AuthUser } {
     if (this.mode !== 'dev') {
-      throw new BadRequestException('Dev login is disabled when AUTH_MODE=alb');
+      throw new BadRequestException(
+        'Dev login is disabled when AUTH_MODE=cognito',
+      );
     }
 
     const devUser = DEV_USERS.find((user) => user.username === username);

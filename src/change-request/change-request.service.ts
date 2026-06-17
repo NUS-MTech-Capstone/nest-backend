@@ -1,11 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { AuthUser } from '../auth/auth.types';
 import { CreateChangeRequestDto } from './dto/create-change-request.dto';
 import { UpdateChangeRequestDto } from './dto/update-change-request.dto';
 import {
   ChangeRequest,
   ChangeRequestStatus,
-  ApprovalHistoryItem,
 } from './change-request.entity';
 import { VirtualMachine } from '../inventory/vm.entity';
 import { ImplementerGroup } from '../implementer-group/implementer-group.entity';
@@ -73,7 +73,9 @@ export class ChangeRequestService {
       const groups = request.implementerGroupIds
         .map((id) => groupsById.get(id))
         .filter((group): group is ImplementerGroup => !!group);
-      const osUsers = [...new Set(groups.flatMap((group) => group.osUsers))];
+      const osUsers = [
+        ...new Set(groups.flatMap((group) => group.osUsers)),
+      ];
       return {
         ...request.toJSON(),
         vms: request.vmIds
@@ -86,30 +88,52 @@ export class ChangeRequestService {
   }
 
   findOne(id: string): Promise<ChangeRequest | null> {
-    return this.changeRequestModel.findByPk(id, { plain: true });
+    return this.changeRequestModel.findByPk(id);
+  }
+
+  /**
+   * Parse an ISO date string and ensure it is not in the past.
+   * Allows a 60-second grace window for clock skew.
+   */
+  private parseScheduledDate(raw: string | undefined): Date | undefined {
+    if (!raw) return undefined;
+    const date = new Date(raw);
+    if (isNaN(date.getTime())) {
+      throw new UnprocessableEntityException('scheduledDate is not a valid date');
+    }
+    const sixtySecondsAgo = new Date(Date.now() - 60_000);
+    if (date < sixtySecondsAgo) {
+      throw new UnprocessableEntityException(
+        'scheduledDate cannot be set to a date in the past',
+      );
+    }
+    return date;
   }
 
   async create(
-    createChangeRequestDto: CreateChangeRequestDto,
-    requester: string,
+    dto: CreateChangeRequestDto,
+    user: AuthUser,
   ): Promise<ChangeRequest> {
+    const requester = user.name ?? user.email ?? user.username;
+    const scheduledDate = this.parseScheduledDate(dto.scheduledDate);
     return this.changeRequestModel.create({
-      title: createChangeRequestDto.title,
-      description: createChangeRequestDto.description,
+      title: dto.title,
+      description: dto.description,
       requester,
-      approvalRoute: createChangeRequestDto.approvalRoute,
-      comments: createChangeRequestDto.comments || '',
-      activities: createChangeRequestDto.activities ?? [],
-      vmIds: createChangeRequestDto.vmIds ?? [],
-      allowedRoles: createChangeRequestDto.allowedRoles ?? [],
-      implementerGroupIds: createChangeRequestDto.implementerGroupIds ?? [],
+      approvalRoute: dto.approvalRoute,
+      comments: dto.comments || '',
+      activities: dto.activities ?? [],
+      vmIds: dto.vmIds ?? [],
+      allowedRoles: dto.allowedRoles ?? [],
+      implementerGroupIds: dto.implementerGroupIds ?? [],
+      scheduledDate,
       status: ChangeRequestStatus.Pending,
       history: [
         {
           when: new Date().toISOString(),
           actor: requester,
           action: 'Created',
-          note: createChangeRequestDto.comments || 'New change submitted.',
+          note: dto.comments || 'New change submitted.',
         },
       ],
     } as any);
@@ -117,8 +141,7 @@ export class ChangeRequestService {
 
   async update(
     id: string,
-    updateChangeRequestDto: UpdateChangeRequestDto,
-    actor: string,
+    dto: UpdateChangeRequestDto,
   ): Promise<ChangeRequest | undefined> {
     const request = await this.findOne(id);
     if (!request) {
@@ -131,40 +154,44 @@ export class ChangeRequestService {
       );
     }
 
-    request.title = updateChangeRequestDto.title || request.title;
-    request.description =
-      updateChangeRequestDto.description || request.description;
-    request.approvalRoute =
-      updateChangeRequestDto.approvalRoute || request.approvalRoute;
-    request.comments = updateChangeRequestDto.comments || request.comments;
-    request.activities =
-      updateChangeRequestDto.activities ?? request.activities;
-    request.vmIds = updateChangeRequestDto.vmIds ?? request.vmIds;
-    request.allowedRoles =
-      updateChangeRequestDto.allowedRoles ?? request.allowedRoles;
-    request.implementerGroupIds =
-      updateChangeRequestDto.implementerGroupIds ?? request.implementerGroupIds;
+    if (dto.title !== undefined) request.title = dto.title;
+    if (dto.description !== undefined) request.description = dto.description;
+    if (dto.approvalRoute !== undefined) request.approvalRoute = dto.approvalRoute;
+    if (dto.comments !== undefined) request.comments = dto.comments;
+    if (dto.activities !== undefined) request.activities = dto.activities;
+    if (dto.vmIds !== undefined) request.vmIds = dto.vmIds;
+    if (dto.allowedRoles !== undefined) request.allowedRoles = dto.allowedRoles;
+    if (dto.implementerGroupIds !== undefined)
+      request.implementerGroupIds = dto.implementerGroupIds;
+    if (dto.scheduledDate !== undefined)
+      request.scheduledDate = this.parseScheduledDate(dto.scheduledDate);
+
     request.history = [
       ...request.history,
       {
         when: new Date().toISOString(),
-        actor,
+        actor: request.requester,
         action: 'Modified',
-        note: updateChangeRequestDto.comments || 'Request updated.',
+        note: dto.comments || 'Request updated.',
       },
     ];
 
     return request.save();
   }
 
-  async approve(
-    id: string,
-    approver: string,
-  ): Promise<ChangeRequest | undefined> {
+  async approve(id: string, user: AuthUser): Promise<ChangeRequest | undefined> {
     const request = await this.findOne(id);
     if (!request) {
       return undefined;
     }
+
+    if (request.status !== ChangeRequestStatus.Pending) {
+      throw new BadRequestException(
+        'Only pending change requests can be approved',
+      );
+    }
+
+    const approver = user.name ?? user.email ?? user.username;
     request.status = ChangeRequestStatus.Approved;
     request.approver = approver;
     request.history = [
@@ -180,15 +207,19 @@ export class ChangeRequestService {
     return request.save();
   }
 
-  async reject(
-    id: string,
-    approver: string,
-  ): Promise<ChangeRequest | undefined> {
+  async reject(id: string, user: AuthUser): Promise<ChangeRequest | undefined> {
     const request = await this.findOne(id);
     if (!request) {
       return undefined;
     }
 
+    if (request.status !== ChangeRequestStatus.Pending) {
+      throw new BadRequestException(
+        'Only pending change requests can be rejected',
+      );
+    }
+
+    const approver = user.name ?? user.email ?? user.username;
     request.status = ChangeRequestStatus.Rejected;
     request.approver = approver;
     request.history = [

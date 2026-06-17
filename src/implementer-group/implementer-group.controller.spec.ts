@@ -74,15 +74,13 @@ describe('ImplementerGroupController', () => {
     const dto = {
       username: 'alice',
       implementerGroupId: 'group-1',
+      requester: 'bob',
     };
     const created = { id: 'req-1', ...dto };
     membershipService.createRequest.mockReturnValue(created);
 
-    expect(controller.createMembershipRequest(dto, user)).toBe(created);
-    expect(membershipService.createRequest).toHaveBeenCalledWith(
-      dto,
-      user.username,
-    );
+    expect(controller.createMembershipRequest(dto)).toBe(created);
+    expect(membershipService.createRequest).toHaveBeenCalledWith(dto);
   });
 
   it('approveMembershipRequest uses current user name', () => {
@@ -90,7 +88,10 @@ describe('ImplementerGroupController', () => {
     membershipService.approve.mockReturnValue(approved);
 
     expect(controller.approveMembershipRequest('req-1', user)).toBe(approved);
-    expect(membershipService.approve).toHaveBeenCalledWith('req-1', user.name);
+    expect(membershipService.approve).toHaveBeenCalledWith(
+      'req-1',
+      user.name,
+    );
   });
 
   it('rejectMembershipRequest uses username when name is missing', () => {

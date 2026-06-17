@@ -5,17 +5,17 @@ import { SERVICE_NAME } from '../common/service.constants';
 
 describe('HealthController', () => {
   let controller: HealthController;
-  let query: jest.Mock;
+  let authenticate: jest.Mock;
 
   beforeEach(async () => {
-    query = jest.fn().mockResolvedValue([[], {}]);
+    authenticate = jest.fn().mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [HealthController],
       providers: [
         {
           provide: getConnectionToken(),
-          useValue: { query },
+          useValue: { authenticate },
         },
       ],
     }).compile();
@@ -38,15 +38,13 @@ describe('HealthController', () => {
         status: 'ready',
         service: SERVICE_NAME,
       });
-      expect(query).toHaveBeenCalledWith('SELECT 1');
+      expect(authenticate).toHaveBeenCalledTimes(1);
     });
 
-    it('returns service unavailable when the query fails', async () => {
-      query.mockRejectedValue(new Error('connection failed'));
+    it('propagates sequelize authentication errors', async () => {
+      authenticate.mockRejectedValue(new Error('connection failed'));
 
-      await expect(controller.ready()).rejects.toThrow(
-        'Service Unavailable Exception',
-      );
+      await expect(controller.ready()).rejects.toThrow('connection failed');
     });
   });
 });

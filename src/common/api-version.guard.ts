@@ -24,7 +24,11 @@ export class ApiVersionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const path: string = request.path ?? '';
 
-    if (isPublic || path === '/healthz' || path === '/readyz') {
+    if (
+      isPublic ||
+      path === `/${SERVICE_NAME}/health` ||
+      path === `/${SERVICE_NAME}/ready`
+    ) {
       return true;
     }
 

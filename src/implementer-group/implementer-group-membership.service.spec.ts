@@ -66,11 +66,7 @@ describe('ImplementerGroupMembershipService', () => {
 
   describe('createRequest', () => {
     it('creates a pending membership request', async () => {
-      const created = {
-        id: 'req-1',
-        ...dto,
-        status: MembershipRequestStatus.Pending,
-      };
+      const created = { id: 'req-1', ...dto, status: MembershipRequestStatus.Pending };
       implementerGroupService.findOne.mockResolvedValue({ id: groupId });
       repository.findMember.mockResolvedValue(null);
       repository.findPendingRequest.mockResolvedValue(null);
@@ -89,18 +85,14 @@ describe('ImplementerGroupMembershipService', () => {
     it('throws when group is not found', async () => {
       implementerGroupService.findOne.mockResolvedValue(null);
 
-      await expect(service.createRequest(dto)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.createRequest(dto)).rejects.toThrow(NotFoundException);
     });
 
     it('throws when user is already a member', async () => {
       implementerGroupService.findOne.mockResolvedValue({ id: groupId });
       repository.findMember.mockResolvedValue({ username: dto.username });
 
-      await expect(service.createRequest(dto)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.createRequest(dto)).rejects.toThrow(BadRequestException);
     });
 
     it('throws when a pending request already exists', async () => {
@@ -108,9 +100,7 @@ describe('ImplementerGroupMembershipService', () => {
       repository.findMember.mockResolvedValue(null);
       repository.findPendingRequest.mockResolvedValue({ id: 'pending-1' });
 
-      await expect(service.createRequest(dto)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.createRequest(dto)).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -134,9 +124,7 @@ describe('ImplementerGroupMembershipService', () => {
       repository.findMember.mockResolvedValue(null);
       repository.saveRequest.mockResolvedValue(approved);
 
-      await expect(service.approve('req-1', 'manager')).resolves.toEqual(
-        approved,
-      );
+      await expect(service.approve('req-1', 'manager')).resolves.toEqual(approved);
       expect(repository.createMember).toHaveBeenCalledWith('alice', groupId);
       expect(repository.saveRequest).toHaveBeenCalledWith(
         expect.objectContaining({ status: MembershipRequestStatus.Approved }),
@@ -182,9 +170,7 @@ describe('ImplementerGroupMembershipService', () => {
       repository.findRequestById.mockResolvedValue({ ...pendingRequest });
       repository.saveRequest.mockResolvedValue(rejected);
 
-      await expect(service.reject('req-1', 'manager')).resolves.toEqual(
-        rejected,
-      );
+      await expect(service.reject('req-1', 'manager')).resolves.toEqual(rejected);
       expect(repository.saveRequest).toHaveBeenCalledWith(
         expect.objectContaining({ status: MembershipRequestStatus.Rejected }),
       );
@@ -213,9 +199,9 @@ describe('ImplementerGroupMembershipService', () => {
   describe('findAccessibleAssets', () => {
     it('returns VMs from groups the user belongs to', async () => {
       const vmModel = {
-        findAll: jest
-          .fn()
-          .mockResolvedValue([{ id: 'vm-1', hostname: 'web01' }]),
+        findAll: jest.fn().mockResolvedValue([
+          { id: 'vm-1', hostname: 'web01' },
+        ]),
       };
       repository.findMembershipsForUser.mockResolvedValue([
         { implementerGroupId: 'group-1' },

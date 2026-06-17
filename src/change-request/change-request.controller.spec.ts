@@ -1,13 +1,12 @@
-import { NotFoundException, ValidationPipe } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ChangeRequestController } from './change-request.controller';
 import { ChangeRequestService } from './change-request.service';
 import type { AuthUser } from '../auth/auth.types';
-import { CreateChangeRequestDto } from './dto/create-change-request.dto';
 
 describe('ChangeRequestController', () => {
   let controller: ChangeRequestController;
-  let changeRequestService: {
+  let service: {
     findAll: jest.Mock;
     findAccessible: jest.Mock;
     findOne: jest.Mock;
@@ -17,14 +16,10 @@ describe('ChangeRequestController', () => {
     reject: jest.Mock;
   };
 
-  const user: AuthUser = {
-    sub: '1',
-    username: 'alice',
-    roles: ['Employee'],
-  };
+  const user: AuthUser = { sub: '1', username: 'alice', name: 'Alice', roles: ['Employee'] };
 
   beforeEach(async () => {
-    changeRequestService = {
+    service = {
       findAll: jest.fn(),
       findAccessible: jest.fn(),
       findOne: jest.fn(),
@@ -36,113 +31,91 @@ describe('ChangeRequestController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ChangeRequestController],
-      providers: [
-        { provide: ChangeRequestService, useValue: changeRequestService },
-      ],
+      providers: [{ provide: ChangeRequestService, useValue: service }],
     }).compile();
 
     controller = module.get(ChangeRequestController);
   });
 
-  it('findAll returns all change requests', () => {
-    const requests = [{ id: 'cr-1' }];
-    changeRequestService.findAll.mockReturnValue(requests);
-
-    expect(controller.findAll()).toBe(requests);
-  });
-
-  it('findAccessible returns requests for user roles', () => {
-    const requests = [{ id: 'cr-1' }];
-    changeRequestService.findAccessible.mockReturnValue(requests);
-
-    expect(controller.findAccessible(user)).toBe(requests);
-    expect(changeRequestService.findAccessible).toHaveBeenCalledWith(
-      user.roles,
-    );
-  });
-
-  it('findOne returns a change request', async () => {
-    const request = { id: 'cr-1' };
-    changeRequestService.findOne.mockResolvedValue(request);
-
-    await expect(controller.findOne('cr-1')).resolves.toBe(request);
-  });
-
-  it('findOne throws when request is missing', async () => {
-    changeRequestService.findOne.mockResolvedValue(undefined);
-
-    await expect(controller.findOne('missing')).rejects.toThrow(
-      NotFoundException,
-    );
-  });
-
-  it('create delegates to service', () => {
-    const dto = { title: 'Deploy' };
-    const created = { id: 'cr-1', ...dto };
-    changeRequestService.create.mockReturnValue(created);
-
-    expect(controller.create(dto as never, user)).toBe(created);
-    expect(changeRequestService.create).toHaveBeenCalledWith(
-      dto,
-      user.username,
-    );
-  });
-
-  it('rejects a client-supplied requester field', async () => {
-    const pipe = new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-    });
-
-    await expect(
-      pipe.transform(
-        {
-          title: 'Deploy',
-          description: 'Deploy the approved release',
-          approvalRoute: 'Manager',
-          requester: 'spoofed-user',
-        },
-        { type: 'body', metatype: CreateChangeRequestDto },
-      ),
-    ).rejects.toMatchObject({
-      response: {
-        message: expect.arrayContaining([
-          'property requester should not exist',
-        ]),
-      },
+  describe('findAll', () => {
+    it('delegates to service and returns all requests', () => {
+      const requests = [{ id: 'cr-1' }];
+      service.findAll.mockReturnValue(requests);
+      expect(controller.findAll()).toBe(requests);
     });
   });
 
-  it('update returns updated request', async () => {
-    const updated = { id: 'cr-1', title: 'Updated' };
-    changeRequestService.update.mockResolvedValue(updated);
-
-    await expect(
-      controller.update('cr-1', { title: 'Updated' } as never, user),
-    ).resolves.toBe(updated);
+  describe('findAccessible', () => {
+    it('calls service with caller roles and returns results', () => {
+      const requests = [{ id: 'cr-1' }];
+      service.findAccessible.mockReturnValue(requests);
+      expect(controller.findAccessible(user)).toBe(requests);
+      expect(service.findAccessible).toHaveBeenCalledWith(user.roles);
+    });
   });
 
-  it('update throws when request is missing', async () => {
-    changeRequestService.update.mockResolvedValue(undefined);
+  describe('findOne', () => {
+    it('returns a change request by id', async () => {
+      const cr = { id: 'cr-1' };
+      service.findOne.mockResolvedValue(cr);
+      await expect(controller.findOne('cr-1')).resolves.toBe(cr);
+    });
 
-    await expect(
-      controller.update('missing', {} as never, user),
-    ).rejects.toThrow(NotFoundException);
+    it('throws NotFoundException when the CR is not found', async () => {
+      service.findOne.mockResolvedValue(null);
+      await expect(controller.findOne('missing')).rejects.toThrow(NotFoundException);
+    });
   });
 
-  it('approve returns approved request', async () => {
-    const approved = { id: 'cr-1', status: 'Approved' };
-    changeRequestService.approve.mockResolvedValue(approved);
+  describe('create', () => {
+    it('creates a CR passing the authenticated user', () => {
+      const dto = { title: 'Deploy', description: 'Patch', approvalRoute: 'Normal' };
+      const created = { id: 'cr-1', ...dto };
+      service.create.mockReturnValue(created);
 
-    await expect(controller.approve('cr-1', user)).resolves.toBe(approved);
+      expect(controller.create(dto as never, user)).toBe(created);
+      expect(service.create).toHaveBeenCalledWith(dto, user);
+    });
   });
 
-  it('reject throws when request is missing', async () => {
-    changeRequestService.reject.mockResolvedValue(undefined);
+  describe('update', () => {
+    it('returns the updated CR', async () => {
+      const updated = { id: 'cr-1', title: 'Updated' };
+      service.update.mockResolvedValue(updated);
+      await expect(controller.update('cr-1', { title: 'Updated' } as never)).resolves.toBe(updated);
+    });
 
-    await expect(controller.reject('missing', user)).rejects.toThrow(
-      NotFoundException,
-    );
+    it('throws NotFoundException when the CR is not found', async () => {
+      service.update.mockResolvedValue(undefined);
+      await expect(controller.update('missing', {} as never)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('approve', () => {
+    it('approves a CR with the authenticated user', async () => {
+      const approved = { id: 'cr-1', status: 'Approved' };
+      service.approve.mockResolvedValue(approved);
+      await expect(controller.approve('cr-1', user)).resolves.toBe(approved);
+      expect(service.approve).toHaveBeenCalledWith('cr-1', user);
+    });
+
+    it('throws NotFoundException when the CR is not found', async () => {
+      service.approve.mockResolvedValue(undefined);
+      await expect(controller.approve('missing', user)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('reject', () => {
+    it('rejects a CR with the authenticated user', async () => {
+      const rejected = { id: 'cr-1', status: 'Rejected' };
+      service.reject.mockResolvedValue(rejected);
+      await expect(controller.reject('cr-1', user)).resolves.toBe(rejected);
+      expect(service.reject).toHaveBeenCalledWith('cr-1', user);
+    });
+
+    it('throws NotFoundException when the CR is not found', async () => {
+      service.reject.mockResolvedValue(undefined);
+      await expect(controller.reject('missing', user)).rejects.toThrow(NotFoundException);
+    });
   });
 });

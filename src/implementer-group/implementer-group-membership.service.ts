@@ -43,7 +43,6 @@ export class ImplementerGroupMembershipService {
 
   async createRequest(
     dto: CreateMembershipRequestDto,
-    requester: string,
   ): Promise<ImplementerGroupMembershipRequest> {
     const group = await this.implementerGroupService.findOne(
       dto.implementerGroupId,
@@ -77,13 +76,13 @@ export class ImplementerGroupMembershipService {
     return this.repository.createRequest({
       username: dto.username,
       implementerGroupId: dto.implementerGroupId,
-      requester,
+      requester: dto.requester,
       comments: dto.comments ?? '',
       status: MembershipRequestStatus.Pending,
       history: [
         {
           when: new Date().toISOString(),
-          actor: requester,
+          actor: dto.requester,
           action: 'Created',
           note: dto.comments || 'Membership request submitted.',
         },
@@ -91,10 +90,7 @@ export class ImplementerGroupMembershipService {
     });
   }
 
-  async approve(
-    id: string,
-    approver: string,
-  ): Promise<ImplementerGroupMembershipRequest> {
+  async approve(id: string, approver: string): Promise<ImplementerGroupMembershipRequest> {
     const request = await this.repository.findRequestById(id);
     if (!request) {
       throw new NotFoundException(`Membership request ${id} not found`);
@@ -128,10 +124,7 @@ export class ImplementerGroupMembershipService {
     return this.repository.saveRequest(request);
   }
 
-  async reject(
-    id: string,
-    approver: string,
-  ): Promise<ImplementerGroupMembershipRequest> {
+  async reject(id: string, approver: string): Promise<ImplementerGroupMembershipRequest> {
     const request = await this.repository.findRequestById(id);
     if (!request) {
       throw new NotFoundException(`Membership request ${id} not found`);

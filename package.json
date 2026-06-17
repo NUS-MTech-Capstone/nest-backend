@@ -23,14 +23,14 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1070.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.1070.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.1067.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/sequelize": "^11.0.1",
     "aws-jwt-verify": "^5.2.1",
-    "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.2",
     "dotenv": "^17.4.2",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0",
@@ -38,8 +38,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sequelize": "^6.33.1",
-    "sequelize-typescript": "^2.1.6",
-    "umzug": "^3.8.2"
+    "sequelize-typescript": "^2.1.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

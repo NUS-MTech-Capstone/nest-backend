@@ -45,10 +45,7 @@ export class ChangeRequestController {
     @Body() createChangeRequestDto: CreateChangeRequestDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.changeRequestService.create(
-      createChangeRequestDto,
-      user.username,
-    );
+    return this.changeRequestService.create(createChangeRequestDto, user);
   }
 
   @Patch(':id')
@@ -56,12 +53,10 @@ export class ChangeRequestController {
   async update(
     @Param('id') id: string,
     @Body() updateChangeRequestDto: UpdateChangeRequestDto,
-    @CurrentUser() user: AuthUser,
   ) {
     const updated = await this.changeRequestService.update(
       id,
       updateChangeRequestDto,
-      user.name || user.username,
     );
     if (!updated) {
       throw new NotFoundException(`Change request with ID ${id} not found`);
@@ -72,10 +67,7 @@ export class ChangeRequestController {
   @Patch(':id/approve')
   @RequirePermission('change.approve')
   async approve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    const approved = await this.changeRequestService.approve(
-      id,
-      user.name || user.username,
-    );
+    const approved = await this.changeRequestService.approve(id, user);
     if (!approved) {
       throw new NotFoundException(`Change request with ID ${id} not found`);
     }
@@ -85,10 +77,7 @@ export class ChangeRequestController {
   @Patch(':id/reject')
   @RequirePermission('change.approve')
   async reject(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    const rejected = await this.changeRequestService.reject(
-      id,
-      user.name || user.username,
-    );
+    const rejected = await this.changeRequestService.reject(id, user);
     if (!rejected) {
       throw new NotFoundException(`Change request with ID ${id} not found`);
     }

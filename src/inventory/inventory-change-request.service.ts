@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import type { AuthUser } from '../auth/auth.types';
 import { CreateInventoryChangeRequestDto } from './dto/create-inventory-change-request.dto';
 import {
   InventoryChangeAction,
@@ -33,7 +34,7 @@ export class InventoryChangeRequestService {
 
   async create(
     dto: CreateInventoryChangeRequestDto,
-    requester: string,
+    user: AuthUser,
   ): Promise<InventoryChangeRequest> {
     if (dto.action === InventoryChangeAction.Update) {
       if (!dto.targetVmId) {
@@ -86,6 +87,7 @@ export class InventoryChangeRequestService {
       }
     }
 
+    const requester = user.name ?? user.email ?? user.username;
     const actionLabel =
       dto.action === InventoryChangeAction.Add ? 'Add server' : 'Update server';
 
@@ -111,10 +113,7 @@ export class InventoryChangeRequestService {
     } as any);
   }
 
-  async approve(
-    id: string,
-    approver: string,
-  ): Promise<InventoryChangeRequest | undefined> {
+  async approve(id: string, user: AuthUser): Promise<InventoryChangeRequest | undefined> {
     const request = await this.findOne(id);
     if (!request) {
       return undefined;
@@ -158,6 +157,7 @@ export class InventoryChangeRequestService {
       }
     }
 
+    const approver = user.name ?? user.email ?? user.username;
     request.status = InventoryChangeStatus.Approved;
     request.approver = approver;
     request.history = [
@@ -173,10 +173,7 @@ export class InventoryChangeRequestService {
     return request.save();
   }
 
-  async reject(
-    id: string,
-    approver: string,
-  ): Promise<InventoryChangeRequest | undefined> {
+  async reject(id: string, user: AuthUser): Promise<InventoryChangeRequest | undefined> {
     const request = await this.findOne(id);
     if (!request) {
       return undefined;
@@ -188,6 +185,7 @@ export class InventoryChangeRequestService {
       );
     }
 
+    const approver = user.name ?? user.email ?? user.username;
     request.status = InventoryChangeStatus.Rejected;
     request.approver = approver;
     request.history = [

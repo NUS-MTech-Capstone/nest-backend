@@ -22,6 +22,7 @@ export interface VirtualMachineCreationAttrs {
   assetStatus?: AssetStatus;
   osVersion: string;
   sshPort?: number;
+  tags?: string[];
 }
 
 @Table({ tableName: 'virtual_machines', timestamps: true })
@@ -52,6 +53,10 @@ export class VirtualMachine extends Model<
   @Default(22)
   @Column({ type: DataType.INTEGER })
   sshPort: number;
+
+  @Default([])
+  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  tags: string[];
 
   @CreatedAt
   @Column({ type: DataType.DATE })

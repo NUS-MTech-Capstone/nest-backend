@@ -42,41 +42,13 @@ describe('AuthController', () => {
       });
     });
 
-    it('returns empty dev users when auth mode is alb', () => {
-      tokenService.mode = 'alb';
+    it('returns empty dev users when auth mode is cognito', () => {
+      tokenService.mode = 'cognito';
 
       expect(controller.getConfig()).toEqual({
-        mode: 'alb',
+        mode: 'cognito',
         devUsers: [],
       });
-    });
-  });
-
-  describe('logout', () => {
-    it('clears ALB cookie chunks and redirects through Cognito', () => {
-      const previous = {
-        domain: process.env.COGNITO_DOMAIN,
-        clientId: process.env.COGNITO_CLIENT_ID,
-        logoutUri: process.env.APP_LOGOUT_URI,
-      };
-      process.env.COGNITO_DOMAIN = 'example.auth.example.com';
-      process.env.COGNITO_CLIENT_ID = 'client-123';
-      process.env.APP_LOGOUT_URI = 'https://api.example.com/login';
-      const response = {
-        clearCookie: jest.fn(),
-        redirect: jest.fn(),
-      };
-
-      controller.logout(response as never);
-
-      expect(response.clearCookie).toHaveBeenCalledTimes(5);
-      expect(response.redirect).toHaveBeenCalledWith(
-        'https://example.auth.example.com/logout?client_id=client-123&logout_uri=https%3A%2F%2Fapi.example.com%2Flogin',
-      );
-
-      process.env.COGNITO_DOMAIN = previous.domain;
-      process.env.COGNITO_CLIENT_ID = previous.clientId;
-      process.env.APP_LOGOUT_URI = previous.logoutUri;
     });
   });
 

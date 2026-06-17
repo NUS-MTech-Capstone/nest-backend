@@ -42,16 +42,13 @@ export class InventoryChangeRequestController {
     @Body() dto: CreateInventoryChangeRequestDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.inventoryChangeRequestService.create(dto, user.username);
+    return this.inventoryChangeRequestService.create(dto, user);
   }
 
   @Patch(':id/approve')
   @RequirePermission('inventory.approve')
   async approve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    const approved = await this.inventoryChangeRequestService.approve(
-      id,
-      user.name || user.username,
-    );
+    const approved = await this.inventoryChangeRequestService.approve(id, user);
     if (!approved) {
       throw new NotFoundException(
         `Inventory change request with ID ${id} not found`,
@@ -63,10 +60,7 @@ export class InventoryChangeRequestController {
   @Patch(':id/reject')
   @RequirePermission('inventory.approve')
   async reject(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    const rejected = await this.inventoryChangeRequestService.reject(
-      id,
-      user.name || user.username,
-    );
+    const rejected = await this.inventoryChangeRequestService.reject(id, user);
     if (!rejected) {
       throw new NotFoundException(
         `Inventory change request with ID ${id} not found`,

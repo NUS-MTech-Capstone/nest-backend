@@ -43,8 +43,12 @@ describe('ApiVersionGuard', () => {
   });
 
   it('allows health and ready paths without version header', () => {
-    expect(guard.canActivate(createContext('/healthz'))).toBe(true);
-    expect(guard.canActivate(createContext('/readyz'))).toBe(true);
+    expect(
+      guard.canActivate(createContext(`/${SERVICE_NAME}/health`)),
+    ).toBe(true);
+    expect(
+      guard.canActivate(createContext(`/${SERVICE_NAME}/ready`)),
+    ).toBe(true);
   });
 
   it('allows requests with supported version header', () => {
@@ -58,9 +62,9 @@ describe('ApiVersionGuard', () => {
   });
 
   it('rejects requests with missing or unsupported version header', () => {
-    expect(() =>
-      guard.canActivate(createContext('/ddm/change-requests')),
-    ).toThrow(BadRequestException);
+    expect(() => guard.canActivate(createContext('/ddm/change-requests'))).toThrow(
+      BadRequestException,
+    );
     expect(() =>
       guard.canActivate(
         createContext('/ddm/change-requests', {

@@ -2,11 +2,9 @@ import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { PERMISSIONS, ROLES } from '../auth/auth.constants';
 import { RequirePermission } from '../auth/decorators';
 import { IdentityUserService } from './identity-user.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { SetUserRolesDto } from './dto/set-user-roles.dto';
-import { SetUserStatusDto } from './dto/set-user-status.dto';
-import { UpdatePoliciesDto } from './dto/update-policies.dto';
+import type { CreateUserRequest } from './identity-user.service';
 import { PolicyService } from './policy.service';
+import type { PolicyRow } from './policy.service';
 
 @Controller('identity')
 export class IdentityController {
@@ -16,20 +14,20 @@ export class IdentityController {
   ) {}
 
   @Get('roles')
-  @RequirePermission('identity.users.manage')
+  @RequirePermission('identity.users.view')
   getRoles() {
     return { roles: ROLES, permissions: PERMISSIONS };
   }
 
   @Get('users')
-  @RequirePermission('identity.users.manage')
+  @RequirePermission('identity.users.view')
   listUsers() {
     return this.identityUserService.listUsers();
   }
 
   @Post('users')
   @RequirePermission('identity.users.manage')
-  createUser(@Body() body: CreateUserDto) {
+  createUser(@Body() body: CreateUserRequest) {
     return this.identityUserService.createUser(body);
   }
 
@@ -37,14 +35,17 @@ export class IdentityController {
   @RequirePermission('identity.users.manage')
   setStatus(
     @Param('username') username: string,
-    @Body() body: SetUserStatusDto,
+    @Body() body: { enabled: boolean },
   ) {
     return this.identityUserService.setEnabled(username, body.enabled);
   }
 
   @Put('users/:username/roles')
   @RequirePermission('identity.users.manage')
-  setRoles(@Param('username') username: string, @Body() body: SetUserRolesDto) {
+  setRoles(
+    @Param('username') username: string,
+    @Body() body: { roles: string[] },
+  ) {
     return this.identityUserService.setRoles(username, body.roles);
   }
 
@@ -56,7 +57,7 @@ export class IdentityController {
 
   @Put('policies')
   @RequirePermission('identity.policies.manage')
-  updatePolicies(@Body() body: UpdatePoliciesDto) {
+  updatePolicies(@Body() body: { policies: PolicyRow[] }) {
     return this.policyService.updateMatrix(body.policies);
   }
 }

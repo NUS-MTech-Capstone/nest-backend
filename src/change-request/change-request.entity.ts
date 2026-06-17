@@ -34,13 +34,11 @@ export interface ChangeRequestCreationAttrs {
   vmIds?: string[];
   allowedRoles?: string[];
   implementerGroupIds?: string[];
+  scheduledDate?: Date;
 }
 
 @Table({ tableName: 'change_requests', timestamps: true })
-export class ChangeRequest extends Model<
-  ChangeRequest,
-  ChangeRequestCreationAttrs
-> {
+export class ChangeRequest extends Model<ChangeRequest, ChangeRequestCreationAttrs> {
   @PrimaryKey
   @Default(DataType.UUIDV4)
   @Column({ type: DataType.UUID })
@@ -92,4 +90,8 @@ export class ChangeRequest extends Model<
   /** Implementer groups assigned to perform work on this change. */
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
   implementerGroupIds: string[];
+
+  /** Planned implementation date. Must not be in the past when set. */
+  @Column({ type: DataType.DATE, allowNull: true })
+  scheduledDate?: Date;
 }
