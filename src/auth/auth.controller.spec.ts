@@ -42,11 +42,11 @@ describe('AuthController', () => {
       });
     });
 
-    it('returns empty dev users when auth mode is cognito', () => {
-      tokenService.mode = 'cognito';
+    it('returns empty dev users when auth mode is alb', () => {
+      tokenService.mode = 'alb';
 
       expect(controller.getConfig()).toEqual({
-        mode: 'cognito',
+        mode: 'alb',
         devUsers: [],
       });
     });

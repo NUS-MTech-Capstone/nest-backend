@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { DEV_USERS } from './auth.constants';
 import type { AuthUser } from './auth.types';
 import { CurrentUser, Public } from './decorators';
@@ -26,6 +34,49 @@ export class AuthController {
             }))
           : [],
     };
+  }
+
+  @Public()
+  @Get('login')
+  login(@Res() res: Response) {
+    if (this.tokenService.mode !== 'alb') {
+      throw new BadRequestException(
+        'ALB login is only available when AUTH_MODE=alb',
+      );
+    }
+
+    const redirect = process.env.APP_LOGIN_REDIRECT || '/access';
+    res.redirect(redirect);
+  }
+
+  @Public()
+  @Get('logout')
+  logout(@Res() res: Response) {
+    if (this.tokenService.mode !== 'alb') {
+      throw new BadRequestException(
+        'ALB logout is only available when AUTH_MODE=alb',
+      );
+    }
+
+    const cookieName =
+      process.env.ALB_AUTH_COOKIE_NAME || 'AWSELBAuthSessionCookie';
+    res.clearCookie(cookieName, { path: '/' });
+
+    const clientId = process.env.COGNITO_CLIENT_ID;
+    const domain = process.env.COGNITO_DOMAIN;
+    const logoutUri = encodeURIComponent(
+      process.env.APP_LOGOUT_URI || '/login',
+    );
+
+    if (!clientId || !domain) {
+      throw new BadRequestException(
+        'COGNITO_CLIENT_ID and COGNITO_DOMAIN must be set for ALB logout',
+      );
+    }
+
+    res.redirect(
+      `https://${domain}/logout?client_id=${clientId}&logout_uri=${logoutUri}`,
+    );
   }
 
   @Public()

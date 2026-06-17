@@ -2,10 +2,11 @@ import {
   Column,
   CreatedAt,
   DataType,
+  Default,
   Model,
   PrimaryKey,
   Table,
-  Default,
+  UpdatedAt,
 } from 'sequelize-typescript';
 
 export enum ChangeRequestStatus {
@@ -94,4 +95,8 @@ export class ChangeRequest extends Model<ChangeRequest, ChangeRequestCreationAtt
   /** Planned implementation date. Must not be in the past when set. */
   @Column({ type: DataType.DATE, allowNull: true })
   scheduledDate?: Date;
+
+  @UpdatedAt
+  @Column({ type: DataType.DATE })
+  declare updatedAt: Date;
 }

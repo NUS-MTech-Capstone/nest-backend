@@ -60,8 +60,10 @@ Sequelize model synchronization is disabled. Apply versioned migrations before
 rolling out a new backend image:
 
 ```bash
-DATABASE_URL='postgres://...' DB_SSL=true npm run migrate
+npm run migrate
 ```
+
+`premigrate` runs `npm run build` automatically so compiled migration files exist.
 
 Versioned migrations create all domain tables. The initial migration seeds the
 six default access policies and creates SSH session tracking and alert event
@@ -73,3 +75,7 @@ production environment.
 The Docker image uses Node.js 22, compiles the application and migrations in a
 builder stage, installs production dependencies only, and runs as a non-root
 user on port `3000`.
+
+The container entrypoint runs database migrations before starting the API.
+Set `SKIP_MIGRATIONS=true` to bypass migration on startup when a separate
+migration job already ran.

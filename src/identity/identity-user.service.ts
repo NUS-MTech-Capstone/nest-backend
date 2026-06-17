@@ -33,8 +33,8 @@ export interface CreateUserRequest {
 
 @Injectable()
 export class IdentityUserService {
-  private readonly mode =
-    process.env.AUTH_MODE === 'cognito' ? 'cognito' : 'dev';
+  private readonly mode: 'dev' | 'alb' =
+    process.env.AUTH_MODE === 'alb' ? 'alb' : 'dev';
 
   private client?: CognitoIdentityProviderClient;
 
@@ -59,7 +59,7 @@ export class IdentityUserService {
   private get userPoolId(): string {
     const poolId = process.env.COGNITO_USER_POOL_ID;
     if (!poolId) {
-      throw new Error('COGNITO_USER_POOL_ID must be set when AUTH_MODE=cognito');
+      throw new Error('COGNITO_USER_POOL_ID must be set when AUTH_MODE=alb');
     }
     return poolId;
   }

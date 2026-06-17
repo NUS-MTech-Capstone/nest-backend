@@ -55,18 +55,24 @@ export class SessionsService {
     @InjectModel(ImplementerGroupMember) private memberModel: typeof ImplementerGroupMember,
     @InjectModel(VirtualMachine) private vmModel: typeof VirtualMachine,
   ) {
-    this.gatewayUrl = process.env.SSH_GATEWAY_URL ?? 'https://api.ddm.keiyam.me';
-    this.gatewayEmail = process.env.SSH_GATEWAY_EMAIL ?? 'you@example.com';
-    this.gatewayPassword = process.env.SSH_GATEWAY_PASSWORD ?? 'TestPassword123!';
-    this.cognitoRegion = process.env.SSH_GATEWAY_COGNITO_REGION ?? 'ap-southeast-1';
+    this.gatewayUrl = process.env.SSH_GATEWAY_URL ?? '';
+    this.gatewayEmail = process.env.SSH_GATEWAY_EMAIL ?? '';
+    this.gatewayPassword = process.env.SSH_GATEWAY_PASSWORD ?? '';
+    this.cognitoRegion =
+      process.env.SSH_GATEWAY_COGNITO_REGION ??
+      process.env.AWS_REGION ??
+      'ap-southeast-1';
     this.cognitoClientId = process.env.SSH_GATEWAY_COGNITO_CLIENT_ID ?? '';
-    this.cognitoClientSecret = process.env.SSH_GATEWAY_COGNITO_CLIENT_SECRET ?? '';
+    this.cognitoClientSecret =
+      process.env.SSH_GATEWAY_COGNITO_CLIENT_SECRET ?? '';
     this.jwtSecret = process.env.DEV_JWT_SECRET ?? 'dev-secret-change-me';
   }
 
   // ── Start Session ─────────────────────────────────────────────────────────
 
   async startSession(dto: StartSessionDto, user: AuthUser): Promise<SessionStartResponse> {
+    this.ensureGatewayConfigured();
+
     // 1. Validate Access Policy (UC: Validate Access Policy)
     const vm = await this.validateAccessPolicy(dto, user);
 
@@ -270,12 +276,27 @@ export class SessionsService {
 
   // ── SSH Gateway helpers ───────────────────────────────────────────────────
 
+  private ensureGatewayConfigured(): void {
+    const missing: string[] = [];
+    if (!this.gatewayUrl) missing.push('SSH_GATEWAY_URL');
+    if (!this.gatewayEmail) missing.push('SSH_GATEWAY_EMAIL');
+    if (!this.gatewayPassword) missing.push('SSH_GATEWAY_PASSWORD');
+    if (!this.cognitoClientId) missing.push('SSH_GATEWAY_COGNITO_CLIENT_ID');
+    if (missing.length > 0) {
+      throw new ServiceUnavailableException(
+        `SSH gateway is not configured (${missing.join(', ')})`,
+      );
+    }
+  }
+
   private callSessionStart(dto: StartSessionDto): Promise<Response> {
     const body: Record<string, string> = {
       hostId: dto.hostId,
-      crId: dto.crId,
       connectionType: dto.connectionType ?? 'ssh',
     };
+    if (dto.crId) {
+      body['crId'] = dto.crId;
+    }
     if (dto.osUser) {
       body['osUser'] = dto.osUser;
     }
