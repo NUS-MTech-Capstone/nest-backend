@@ -1,4 +1,6 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import type { Response } from 'express';
 import { AuthController } from './auth.controller';
 import { TokenService } from './token.service';
 import { PolicyService } from '../identity/policy.service';
@@ -81,6 +83,59 @@ describe('AuthController', () => {
       expect(policyService.getPermissionsForRoles).toHaveBeenCalledWith(
         user.roles,
       );
+    });
+  });
+
+  describe('login', () => {
+    it('redirects to APP_LOGIN_REDIRECT in alb mode', () => {
+      tokenService.mode = 'alb';
+      process.env.APP_LOGIN_REDIRECT = '/access';
+      const res = {
+        redirect: jest.fn(),
+      } as unknown as Response;
+
+      controller.login(res);
+
+      expect(res.redirect).toHaveBeenCalledWith('/access');
+    });
+
+    it('rejects login when auth mode is dev', () => {
+      expect(() =>
+        controller.login({ redirect: jest.fn() } as unknown as Response),
+      ).toThrow(BadRequestException);
+    });
+  });
+
+  describe('logout', () => {
+    it('clears the ALB cookie and redirects to Cognito logout', () => {
+      tokenService.mode = 'alb';
+      process.env.ALB_AUTH_COOKIE_NAME = 'AWSELBAuthSessionCookie';
+      process.env.COGNITO_CLIENT_ID = 'client-id';
+      process.env.COGNITO_DOMAIN = 'example.auth.ap-southeast-1.amazoncognito.com';
+      process.env.APP_LOGOUT_URI = 'http://localhost:4200/login';
+
+      const res = {
+        clearCookie: jest.fn(),
+        redirect: jest.fn(),
+      } as unknown as Response;
+
+      controller.logout(res);
+
+      expect(res.clearCookie).toHaveBeenCalledWith('AWSELBAuthSessionCookie', {
+        path: '/',
+      });
+      expect(res.redirect).toHaveBeenCalledWith(
+        'https://example.auth.ap-southeast-1.amazoncognito.com/logout?client_id=client-id&logout_uri=http%3A%2F%2Flocalhost%3A4200%2Flogin',
+      );
+    });
+
+    it('rejects logout when auth mode is dev', () => {
+      expect(() =>
+        controller.logout({
+          clearCookie: jest.fn(),
+          redirect: jest.fn(),
+        } as unknown as Response),
+      ).toThrow(BadRequestException);
     });
   });
 });
