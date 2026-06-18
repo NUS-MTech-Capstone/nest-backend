@@ -58,7 +58,7 @@ export function buildDatabaseConfig(
 
   return {
     ...base,
-    ...(databaseUrl ? { url: databaseUrl } : {}),
+    ...(databaseUrl ? { uri: databaseUrl } : {}),
     models,
     autoLoadModels: true,
     synchronize: false,
