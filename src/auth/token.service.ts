@@ -1,10 +1,10 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
-import { createPublicKey, type JsonWebKey } from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import { DEV_USERS } from './auth.constants';
 import { AuthUser } from './auth.types';
@@ -13,6 +13,7 @@ export type AuthMode = 'dev' | 'alb';
 
 @Injectable()
 export class TokenService {
+  private readonly logger = new Logger(TokenService.name);
   readonly mode: AuthMode = process.env.AUTH_MODE === 'alb' ? 'alb' : 'dev';
 
   private readonly devSecret =
@@ -65,12 +66,16 @@ export class TokenService {
       throw new UnauthorizedException('ALB and Cognito subject mismatch');
     }
 
+    // Cognito puts the username under 'cognito:username' in OIDC tokens.
+    const username =
+      (claims['cognito:username'] as string) ||
+      (claims['preferred_username'] as string) ||
+      (claims.username as string) ||
+      claimsSub;
+
     return {
       sub: claimsSub,
-      username:
-        (claims.username as string) ||
-        (claims['preferred_username'] as string) ||
-        claimsSub,
+      username,
       email: claims.email as string | undefined,
       name: claims.name as string | undefined,
       roles: (accessPayload['cognito:groups'] as string[]) || [],
@@ -139,14 +144,33 @@ export class TokenService {
       );
     }
 
-    const decoded = jwt.decode(token, { complete: true });
+    // Trim whitespace — some proxies pad header values.
+    const trimmed = token.trim();
+
+    const decoded = jwt.decode(trimmed, { complete: true });
     if (!decoded || typeof decoded === 'string') {
+      // Log enough to diagnose without exposing the full token.
+      this.logger.error(
+        `ALB OIDC decode failed — header length=${token.length}, ` +
+          `trimmed length=${trimmed.length}, ` +
+          `starts with="${trimmed.slice(0, 10)}"`,
+      );
       throw new UnauthorizedException('Invalid ALB OIDC token');
     }
 
     const payload = decoded.payload as jwt.JwtPayload;
-    if (payload.signer !== albArn) {
+
+    // The 'signer' claim contains the ALB ARN. Verify it matches the configured
+    // ARN so tokens issued by a different ALB are rejected.
+    const tokenSigner = payload.signer as string | undefined;
+    if (tokenSigner && tokenSigner !== albArn) {
+      this.logger.error(
+        `ALB signer mismatch — token signer="${tokenSigner}", expected="${albArn}"`,
+      );
       throw new UnauthorizedException('ALB signer mismatch');
+    }
+    if (!tokenSigner) {
+      this.logger.warn('ALB OIDC token has no signer claim — skipping ARN check');
     }
 
     const kid = decoded.header.kid as string | undefined;
@@ -155,33 +179,31 @@ export class TokenService {
     }
 
     const publicKey = await this.getAlbPublicKey(region, kid);
-    return jwt.verify(token, publicKey, {
+    return jwt.verify(trimmed, publicKey, {
       algorithms: ['ES256'],
     }) as jwt.JwtPayload;
   }
 
-  private async getAlbPublicKey(
-    region: string,
-    kid: string,
-  ): Promise<string> {
+  private async getAlbPublicKey(region: string, kid: string): Promise<string> {
     const cacheKey = `${region}:${kid}`;
     const cached = this.albPublicKeyCache.get(cacheKey);
     if (cached) {
       return cached;
     }
 
+    // The ALB public key endpoint returns a PEM-encoded EC public key as
+    // plain text — NOT a JSON Web Key. Using response.json() here would
+    // throw a JSON parse error.
     const response = await fetch(
       `https://public-keys.auth.elb.${region}.amazonaws.com/${kid}`,
     );
     if (!response.ok) {
-      throw new UnauthorizedException('Unable to fetch ALB public key');
+      throw new UnauthorizedException(
+        `Unable to fetch ALB public key (kid=${kid}, status=${response.status})`,
+      );
     }
 
-    const keyJson = (await response.json()) as JsonWebKey;
-    const pem = createPublicKey({ key: keyJson, format: 'jwk' }).export({
-      type: 'spki',
-      format: 'pem',
-    }) as string;
+    const pem = await response.text();
     this.albPublicKeyCache.set(cacheKey, pem);
     return pem;
   }
