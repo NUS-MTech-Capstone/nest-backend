@@ -39,7 +39,7 @@ describe('database config', () => {
 
     const config = buildDatabaseConfig([]);
 
-    expect(config.url).toBe('postgres://user:pass@db:5432/ddm');
+    expect(config.uri).toBe('postgres://user:pass@db:5432/ddm');
     expect(config.synchronize).toBe(false);
   });
 
