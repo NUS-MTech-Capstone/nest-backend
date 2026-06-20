@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import * as jwt from 'jsonwebtoken';
-import { DEV_USERS } from './auth.constants';
+import { DEV_USERS, ROLES } from './auth.constants';
 import { AuthUser } from './auth.types';
 
 export type AuthMode = 'dev' | 'alb';
@@ -103,14 +103,22 @@ export class TokenService {
       (claims.username as string) ||
       claimsSub;
 
-    this.logger.debug(`ALB auth OK — sub=${claimsSub}, username=${username}`);
+    // Cognito group names may arrive in any casing (e.g. "admin", "Admin").
+    // Normalise them to the canonical Pascal-case names the permission matrix
+    // uses so that role lookups always match.
+    const rawGroups = (accessPayload['cognito:groups'] as string[]) || [];
+    const roles = rawGroups.map(
+      (g) => ROLES.find((r) => r.toLowerCase() === g.toLowerCase()) ?? g,
+    );
+
+    this.logger.debug(`ALB auth OK — sub=${claimsSub}, username=${username}, roles=${roles.join(',')}`);
 
     return {
       sub: claimsSub,
       username,
       email: claims.email as string | undefined,
       name: claims.name as string | undefined,
-      roles: (accessPayload['cognito:groups'] as string[]) || [],
+      roles,
     };
   }
 
