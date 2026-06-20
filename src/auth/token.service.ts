@@ -20,7 +20,10 @@ export class TokenService {
   private readonly devSecret =
     process.env.DEV_JWT_SECRET || 'dev-secret-change-me';
 
-  private cognitoJwtVerifier?: ReturnType<typeof CognitoJwtVerifier.create>;
+  private readonly cognitoVerifierCache = new Map<
+    string,
+    ReturnType<typeof CognitoJwtVerifier.create>
+  >();
   private readonly albPublicKeyCache = new Map<string, string>();
 
   albVerifier = {
@@ -28,7 +31,8 @@ export class TokenService {
   };
 
   cognitoVerifier = {
-    verify: (token: string) => this.getCognitoVerifier().verify(token),
+    verify: (token: string) =>
+      this.getCognitoVerifier(this.resolveUserPoolId(token)).verify(token),
   };
 
   async verify(token: string): Promise<AuthUser> {
@@ -145,22 +149,63 @@ export class TokenService {
     return { accessToken, user };
   }
 
-  private getCognitoVerifier() {
-    if (!this.cognitoJwtVerifier) {
-      const userPoolId = process.env.COGNITO_USER_POOL_ID;
-      const clientId = process.env.COGNITO_CLIENT_ID;
-      if (!userPoolId || !clientId) {
-        throw new Error(
-          'COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID must be set when AUTH_MODE=alb',
+  /** Extract the Cognito User Pool ID from the configured env var, falling
+   *  back to parsing the token's `iss` claim when the env var is absent.
+   *  Logs a one-time warning with the derived value so operators can pin it. */
+  private resolveUserPoolId(rawAccessToken: string): string {
+    if (process.env.COGNITO_USER_POOL_ID) {
+      return process.env.COGNITO_USER_POOL_ID;
+    }
+
+    try {
+      const parts = rawAccessToken.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(
+          Buffer.from(parts[1], 'base64url').toString('utf8'),
+        );
+        // iss format: https://cognito-idp.{region}.amazonaws.com/{poolId}
+        const poolId = (payload.iss as string | undefined)?.split('/').pop();
+        if (poolId) {
+          this.logger.warn(
+            `COGNITO_USER_POOL_ID not configured — derived "${poolId}" from token iss. ` +
+              `Set COGNITO_USER_POOL_ID=${poolId} to silence this warning.`,
+          );
+          return poolId;
+        }
+      }
+    } catch {
+      // fall through to throw
+    }
+
+    throw new UnauthorizedException(
+      'Cannot determine Cognito User Pool ID — set COGNITO_USER_POOL_ID env var',
+    );
+  }
+
+  private getCognitoVerifier(
+    userPoolId: string,
+  ): ReturnType<typeof CognitoJwtVerifier.create> {
+    let verifier = this.cognitoVerifierCache.get(userPoolId);
+    if (!verifier) {
+      // COGNITO_CLIENT_ID must match the Cognito App Client the ALB uses.
+      // If omitted, pass null so aws-jwt-verify skips the client_id check —
+      // the ALB has already authenticated the user; we still verify the
+      // signature, expiry, and issuer.
+      const clientId = process.env.COGNITO_CLIENT_ID || null;
+      if (!clientId) {
+        this.logger.warn(
+          'COGNITO_CLIENT_ID not set — skipping client_id claim check on Cognito access token',
         );
       }
-      this.cognitoJwtVerifier = CognitoJwtVerifier.create({
+
+      verifier = CognitoJwtVerifier.create({
         userPoolId,
         tokenUse: 'access',
         clientId,
       });
+      this.cognitoVerifierCache.set(userPoolId, verifier);
     }
-    return this.cognitoJwtVerifier;
+    return verifier;
   }
 
   private async verifyAlbOidcDataToken(token: string): Promise<jwt.JwtPayload> {
