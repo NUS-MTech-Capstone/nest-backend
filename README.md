@@ -79,3 +79,12 @@ user on port `3000`.
 The container entrypoint runs database migrations before starting the API.
 Set `SKIP_MIGRATIONS=true` to bypass migration on startup when a separate
 migration job already ran.
+
+## API Specification
+
+The OpenAPI contract is checked in at `api/openapi.yaml` and is served
+unauthenticated outside the `/ddm` prefix at:
+
+```http
+GET /openapi.yaml
+```

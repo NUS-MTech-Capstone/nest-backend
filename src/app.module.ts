@@ -20,6 +20,8 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { AlertEvent } from './monitoring/alert-event.entity';
 import { Session } from './sessions/session.entity';
 import { buildDatabaseConfig } from './config/database.config';
+import { ApiSpecController } from './api-spec/api-spec.controller';
+import { ApiSpecService } from './api-spec/api-spec.service';
 
 const models = [
   ChangeRequest,
@@ -45,7 +47,7 @@ const models = [
     SessionsModule,
     MonitoringModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, ApiSpecController],
+  providers: [AppService, ApiSpecService],
 })
 export class AppModule {}

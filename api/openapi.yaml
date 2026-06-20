@@ -1,0 +1,769 @@
+openapi: 3.1.0
+info:
+  title: DenDenMushi Nest Backend API
+  version: 0.1.0
+  description: Web application API for auth, identity administration, change requests, inventory, implementer groups, sessions, and monitoring.
+servers:
+  - url: http://localhost:3000
+    description: Local Nest backend; application APIs are under /ddm.
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe outside the /ddm prefix
+      security: []
+      responses:
+        "200":
+          description: Process is running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeResponse"
+  /readyz:
+    get:
+      summary: Readiness probe outside the /ddm prefix
+      security: []
+      responses:
+        "200":
+          description: Process and PostgreSQL are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeResponse"
+  /ddm/auth/config:
+    get:
+      summary: Get frontend authentication configuration
+      security: []
+      responses:
+        "200":
+          description: Authentication configuration.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /ddm/auth/login:
+    get:
+      summary: Start ALB/Cognito login redirect
+      security: []
+      responses:
+        "302":
+          description: Redirect to the authenticated app.
+  /ddm/auth/logout:
+    get:
+      summary: Clear local auth state and redirect
+      security: []
+      responses:
+        "302":
+          description: Redirect after logout.
+  /ddm/auth/dev-login:
+    post:
+      summary: Development-only login helper
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username:
+                  type: string
+      responses:
+        "200":
+          description: Development login response.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /ddm/auth/me:
+    get:
+      summary: Get the authenticated user
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+  /ddm/identity/roles:
+    get:
+      summary: List supported identity roles
+      responses:
+        "200":
+          description: Role names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /ddm/identity/users:
+    get:
+      summary: List Cognito users
+      responses:
+        "200":
+          description: Users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      summary: Create a Cognito user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Created user.
+  /ddm/identity/users/{username}/status:
+    patch:
+      summary: Enable or disable a Cognito user
+      parameters:
+        - $ref: "#/components/parameters/Username"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated user status.
+  /ddm/identity/users/{username}/roles:
+    put:
+      summary: Replace Cognito user roles
+      parameters:
+        - $ref: "#/components/parameters/Username"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Updated user roles.
+  /ddm/identity/policies:
+    get:
+      summary: List role permission policies
+      responses:
+        "200":
+          description: Policy rows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PolicyRow"
+    put:
+      summary: Replace role permission policies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policies]
+              properties:
+                policies:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PolicyRow"
+      responses:
+        "200":
+          description: Updated policies.
+  /ddm/change-requests:
+    get:
+      summary: List change requests
+      responses:
+        "200":
+          description: Change requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChangeRequest"
+    post:
+      summary: Create a change request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChangeRequest"
+      responses:
+        "201":
+          description: Created change request.
+  /ddm/change-requests/accessible:
+    get:
+      summary: List change requests accessible to the authenticated user
+      responses:
+        "200":
+          description: Accessible change requests.
+  /ddm/change-requests/{id}:
+    get:
+      summary: Get a change request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Change request.
+    patch:
+      summary: Update a change request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateChangeRequest"
+      responses:
+        "200":
+          description: Updated change request.
+  /ddm/change-requests/{id}/approve:
+    patch:
+      summary: Approve a change request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Approved change request.
+  /ddm/change-requests/{id}/reject:
+    patch:
+      summary: Reject a change request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Rejected change request.
+  /ddm/inventory/vms:
+    get:
+      summary: List virtual machines
+      responses:
+        "200":
+          description: Virtual machines.
+    post:
+      summary: Create a virtual machine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VirtualMachineInput"
+      responses:
+        "201":
+          description: Created virtual machine.
+  /ddm/inventory/vms/sync:
+    post:
+      summary: Sync virtual machines from inventory records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vms]
+              properties:
+                vms:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/VirtualMachineInput"
+      responses:
+        "200":
+          description: Sync result.
+  /ddm/inventory/vms/{id}:
+    get:
+      summary: Get a virtual machine
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Virtual machine.
+    patch:
+      summary: Update a virtual machine
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VirtualMachineInput"
+      responses:
+        "200":
+          description: Updated virtual machine.
+    delete:
+      summary: Delete a virtual machine
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Deleted virtual machine.
+  /ddm/inventory/vms/{id}/tags:
+    patch:
+      summary: Replace virtual machine tags
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tags]
+              properties:
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Updated tags.
+  /ddm/inventory/change-requests:
+    get:
+      summary: List inventory change requests
+      responses:
+        "200":
+          description: Inventory change requests.
+    post:
+      summary: Create an inventory change request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created inventory change request.
+  /ddm/inventory/change-requests/{id}:
+    get:
+      summary: Get an inventory change request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Inventory change request.
+  /ddm/inventory/change-requests/{id}/approve:
+    patch:
+      summary: Approve an inventory change request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Approved inventory change request.
+  /ddm/inventory/change-requests/{id}/reject:
+    patch:
+      summary: Reject an inventory change request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Rejected inventory change request.
+  /ddm/implementer-groups:
+    get:
+      summary: List implementer groups
+      responses:
+        "200":
+          description: Implementer groups.
+    post:
+      summary: Create an implementer group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImplementerGroupInput"
+      responses:
+        "201":
+          description: Created implementer group.
+  /ddm/implementer-groups/{id}:
+    get:
+      summary: Get an implementer group
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Implementer group.
+    patch:
+      summary: Update an implementer group
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImplementerGroupInput"
+      responses:
+        "200":
+          description: Updated implementer group.
+    delete:
+      summary: Delete an implementer group
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Deleted implementer group.
+  /ddm/implementer-groups/{id}/members:
+    get:
+      summary: List implementer group members
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Group members.
+  /ddm/implementer-groups/{id}/members/{username}:
+    delete:
+      summary: Remove an implementer group member
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/Username"
+      responses:
+        "200":
+          description: Member removed.
+  /ddm/implementer-groups/membership-requests:
+    get:
+      summary: List implementer group membership requests
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Membership requests.
+    post:
+      summary: Create a membership request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created membership request.
+  /ddm/implementer-groups/membership-requests/{id}/approve:
+    patch:
+      summary: Approve a membership request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Approved membership request.
+  /ddm/implementer-groups/membership-requests/{id}/reject:
+    patch:
+      summary: Reject a membership request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Rejected membership request.
+  /ddm/implementer-groups/accessible-vms:
+    get:
+      summary: List VMs accessible to the authenticated implementer
+      responses:
+        "200":
+          description: Accessible VMs.
+  /ddm/sessions/start:
+    post:
+      summary: Start a terminal session through the gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostId, crId]
+              properties:
+                hostId:
+                  type: string
+                crId:
+                  type: string
+                connectionType:
+                  type: string
+                  enum: [ssh]
+      responses:
+        "201":
+          description: Gateway session token and WebSocket URL.
+  /ddm/sessions/active:
+    get:
+      summary: List active sessions
+      parameters:
+        - name: hostId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Active sessions.
+  /ddm/sessions/mine:
+    get:
+      summary: List sessions owned by the authenticated user
+      responses:
+        "200":
+          description: User sessions.
+  /ddm/sessions/{id}:
+    get:
+      summary: Get a recorded webapp session
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Session record.
+  /ddm/sessions/{id}/token:
+    get:
+      summary: Get a fresh session token for a recorded session
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Fresh session token and WebSocket URL.
+  /ddm/sessions/{id}/end:
+    patch:
+      summary: Mark a recorded session ended
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Ended session.
+  /ddm/sessions/{id}/disconnect:
+    patch:
+      summary: Mark a recorded session disconnected
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Disconnected session.
+  /ddm/monitoring/status:
+    get:
+      summary: Get monitoring status
+      responses:
+        "200":
+          description: Status summary.
+  /ddm/monitoring/alarms:
+    get:
+      summary: List CloudWatch alarms
+      responses:
+        "200":
+          description: Alarms.
+  /ddm/monitoring/metrics:
+    get:
+      summary: Query CloudWatch metrics
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            default: RequestCount
+        - name: namespace
+          in: query
+          schema:
+            type: string
+        - name: hours
+          in: query
+          schema:
+            type: string
+            default: "24"
+        - name: period
+          in: query
+          schema:
+            type: string
+            default: "3600"
+      responses:
+        "200":
+          description: Metric data.
+  /ddm/monitoring/logs/app:
+    get:
+      summary: Query application logs
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: Log events.
+  /ddm/monitoring/logs/sessions:
+    get:
+      summary: Query session logs
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: Session log events.
+  /ddm/monitoring/alerts:
+    get:
+      summary: List alert events
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Alert events.
+  /ddm/monitoring/alerts/webhook:
+    post:
+      summary: Public SNS alert webhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Webhook accepted.
+components:
+  securitySchemes:
+    albSession:
+      type: apiKey
+      in: cookie
+      name: AWSELBAuthSessionCookie
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Username:
+      name: username
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: string
+        default: "100"
+    Filter:
+      name: filter
+      in: query
+      schema:
+        type: string
+  schemas:
+    ProbeResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+          example: ddm
+    AuthUser:
+      type: object
+      additionalProperties: true
+      properties:
+        sub:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+    User:
+      type: object
+      additionalProperties: true
+    CreateUserRequest:
+      type: object
+      required: [username]
+      additionalProperties: true
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        temporaryPassword:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+    PolicyRow:
+      type: object
+      required: [role, permissions]
+      properties:
+        role:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    ChangeRequest:
+      type: object
+      additionalProperties: true
+    CreateChangeRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        vmIds:
+          type: array
+          items:
+            type: string
+        scheduledDate:
+          type: string
+    UpdateChangeRequest:
+      type: object
+      additionalProperties: true
+    VirtualMachineInput:
+      type: object
+      additionalProperties: true
+      properties:
+        hostname:
+          type: string
+        ipAddress:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+    ImplementerGroupInput:
+      type: object
+      additionalProperties: true
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        vmIds:
+          type: array
+          items:
+            type: string
+security:
+  - albSession: []
+  - bearerAuth: []
