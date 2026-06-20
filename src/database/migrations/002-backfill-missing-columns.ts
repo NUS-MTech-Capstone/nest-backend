@@ -17,7 +17,8 @@ async function addIfMissing(
   column: string,
   definition: Parameters<QueryInterface['addColumn']>[2],
 ): Promise<void> {
-  const desc = await context.describeTable(table).catch(() => ({}));
+  const desc = await context.describeTable(table).catch(() => undefined);
+  if (!desc) return;
   if (column in desc) return;
   await context.addColumn(table, column, definition);
 }
@@ -35,13 +36,17 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
 };
 
 export const down: MigrationFn<QueryInterface> = async ({ context }) => {
-  const crDesc = await context.describeTable('change_requests').catch(() => ({}));
-  if ('scheduledDate' in crDesc) {
+  const crDesc = await context
+    .describeTable('change_requests')
+    .catch(() => undefined);
+  if (crDesc && 'scheduledDate' in crDesc) {
     await context.removeColumn('change_requests', 'scheduledDate');
   }
 
-  const asDesc = await context.describeTable('access_sessions').catch(() => ({}));
-  if ('gatewaySessionId' in asDesc) {
+  const asDesc = await context
+    .describeTable('access_sessions')
+    .catch(() => undefined);
+  if (asDesc && 'gatewaySessionId' in asDesc) {
     await context.removeColumn('access_sessions', 'gatewaySessionId');
   }
 };
