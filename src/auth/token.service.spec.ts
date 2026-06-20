@@ -7,7 +7,9 @@ import { TokenService } from './token.service';
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
-/** Build a minimal ES256 JWT signed with the given private key PEM. */
+/** Build a minimal ES256 JWT signed with the given private key PEM.
+ *  Uses IEEE P1363 (raw R||S) encoding to match the JWT spec — Node.js
+ *  defaults to DER, which would produce invalid JWT signatures. */
 function makeAlbToken(
   payload: Record<string, unknown>,
   privateKeyPem: string,
@@ -18,7 +20,9 @@ function makeAlbToken(
   const b64 = (obj: unknown) =>
     Buffer.from(JSON.stringify(obj)).toString('base64url');
   const signable = `${b64(header)}.${b64(payload)}`;
-  const sig = createSign('SHA256').update(signable).sign(privateKeyPem);
+  const sig = createSign('SHA256')
+    .update(signable)
+    .sign({ key: privateKeyPem, dsaEncoding: 'ieee-p1363' });
   return `${signable}.${sig.toString('base64url')}`;
 }
 

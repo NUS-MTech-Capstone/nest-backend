@@ -197,7 +197,7 @@ export class TokenService {
       throw new UnauthorizedException('ALB signer mismatch');
     }
     if (!tokenSigner) {
-      this.logger.warn('ALB OIDC token has no signer claim — skipping ARN check');
+      this.logger.debug('ALB OIDC token has no signer claim — skipping ARN check');
     }
 
     const kid = header.kid as string | undefined;
@@ -212,6 +212,10 @@ export class TokenService {
     // base64url decoder, which differs from Buffer('base64url') and throws
     // "invalid token" for tokens that our manual parsing handles correctly.
     // Using crypto directly bypasses that parsing layer entirely.
+    //
+    // JWT ES256 signatures are IEEE P1363 (raw R||S, 64 bytes for P-256),
+    // NOT DER-encoded. Node.js crypto defaults to DER, so we must specify
+    // dsaEncoding: 'ieee-p1363' to match the JWT signature format.
     const signedData = `${parts[0]}.${parts[1]}`;
     const signatureBuffer = Buffer.from(parts[2], 'base64url');
 
@@ -219,7 +223,10 @@ export class TokenService {
     try {
       const verifier = createVerify('SHA256');
       verifier.update(signedData);
-      signatureValid = verifier.verify(publicKey, signatureBuffer);
+      signatureValid = verifier.verify(
+        { key: publicKey, dsaEncoding: 'ieee-p1363' },
+        signatureBuffer,
+      );
     } catch (e) {
       this.logger.error(`ALB OIDC crypto verify error: ${e}`);
       throw new UnauthorizedException('ALB OIDC signature verification failed');
