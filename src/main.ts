@@ -43,6 +43,7 @@ async function bootstrap() {
     exclude: [
       { path: 'healthz', method: RequestMethod.GET },
       { path: 'readyz', method: RequestMethod.GET },
+      { path: 'openapi.yaml', method: RequestMethod.GET },
     ],
   });
   app.useGlobalPipes(

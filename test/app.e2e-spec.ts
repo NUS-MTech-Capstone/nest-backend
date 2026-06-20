@@ -18,6 +18,7 @@ describe('AppController (e2e)', () => {
       exclude: [
         { path: 'healthz', method: RequestMethod.GET },
         { path: 'readyz', method: RequestMethod.GET },
+        { path: 'openapi.yaml', method: RequestMethod.GET },
       ],
     });
     await app.init();
@@ -35,6 +36,17 @@ describe('AppController (e2e)', () => {
       .get('/readyz')
       .expect(200)
       .expect({ status: 'ready', service: SERVICE_NAME });
+  });
+
+  it('GET /openapi.yaml', () => {
+    return request(app.getHttpServer())
+      .get('/openapi.yaml')
+      .expect('Content-Type', /application\/yaml/)
+      .expect(200)
+      .expect((response) => {
+        expect(response.text).toContain('openapi: 3.1.0');
+        expect(response.text).toContain('DenDenMushi Nest Backend API');
+      });
   });
 
   afterEach(async () => {
