@@ -144,21 +144,47 @@ export class TokenService {
       );
     }
 
-    // Trim whitespace — some proxies pad header values.
-    const trimmed = token.trim();
+    // Strip ALL whitespace — some proxies fold long headers with \r\n + space,
+    // inserting internal newlines that .trim() does not remove.
+    const sanitized = token.replace(/\s+/g, '');
 
-    const decoded = jwt.decode(trimmed, { complete: true });
-    if (!decoded || typeof decoded === 'string') {
-      // Log enough to diagnose without exposing the full token.
+    // ── Manual JWT structure validation ──────────────────────────────────────
+    // jwt.decode() returns null for any format error without telling us why.
+    // Splitting manually gives us precise diagnostics at each failure point.
+    const parts = sanitized.split('.');
+    if (parts.length !== 3) {
       this.logger.error(
-        `ALB OIDC decode failed — header length=${token.length}, ` +
-          `trimmed length=${trimmed.length}, ` +
-          `starts with="${trimmed.slice(0, 10)}"`,
+        `ALB OIDC token has ${parts.length} dot-separated parts (expected 3) — ` +
+          `original length=${token.length}, sanitized length=${sanitized.length}`,
       );
       throw new UnauthorizedException('Invalid ALB OIDC token');
     }
 
-    const payload = decoded.payload as jwt.JwtPayload;
+    let header: Record<string, unknown>;
+    let payload: jwt.JwtPayload;
+
+    try {
+      header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+    } catch (e) {
+      this.logger.error(
+        `ALB OIDC header base64url decode failed — ` +
+          `part[0] length=${parts[0].length}, starts with="${parts[0].slice(0, 10)}": ${e}`,
+      );
+      throw new UnauthorizedException('Invalid ALB OIDC token');
+    }
+
+    try {
+      payload = JSON.parse(
+        Buffer.from(parts[1], 'base64url').toString('utf8'),
+      ) as jwt.JwtPayload;
+    } catch (e) {
+      this.logger.error(
+        `ALB OIDC payload base64url decode failed — ` +
+          `part[1] length=${parts[1].length}: ${e}`,
+      );
+      throw new UnauthorizedException('Invalid ALB OIDC token');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // The 'signer' claim contains the ALB ARN. Verify it matches the configured
     // ARN so tokens issued by a different ALB are rejected.
@@ -173,13 +199,13 @@ export class TokenService {
       this.logger.warn('ALB OIDC token has no signer claim — skipping ARN check');
     }
 
-    const kid = decoded.header.kid as string | undefined;
+    const kid = header.kid as string | undefined;
     if (!kid) {
       throw new UnauthorizedException('Missing ALB OIDC key id');
     }
 
     const publicKey = await this.getAlbPublicKey(region, kid);
-    return jwt.verify(trimmed, publicKey, {
+    return jwt.verify(sanitized, publicKey, {
       algorithms: ['ES256'],
     }) as jwt.JwtPayload;
   }
