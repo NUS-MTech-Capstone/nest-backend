@@ -56,14 +56,39 @@ export class TokenService {
     oidcData: string,
     accessToken: string,
   ): Promise<AuthUser> {
-    const claims = (await this.albVerifier.verify(oidcData)) as jwt.JwtPayload;
-    const accessPayload = (await this.cognitoVerifier.verify(
-      accessToken,
-    )) as Record<string, unknown>;
+    // ── Step 1: verify the ALB OIDC data token (our crypto path) ─────────
+    let claims: jwt.JwtPayload;
+    try {
+      claims = (await this.albVerifier.verify(oidcData)) as jwt.JwtPayload;
+    } catch (err) {
+      // Re-throw HttpExceptions (UnauthorizedException etc.) as-is.
+      if (err instanceof UnauthorizedException) throw err;
+      this.logger.error(`ALB OIDC data token verification failed: ${err}`);
+      throw new UnauthorizedException('ALB OIDC data token invalid');
+    }
 
+    // ── Step 2: verify the Cognito access token ───────────────────────────
+    // aws-jwt-verify throws its own error types (not HttpException).
+    // Wrap them so the client always receives a proper 401.
+    let accessPayload: Record<string, unknown>;
+    try {
+      accessPayload = (await this.cognitoVerifier.verify(
+        accessToken,
+      )) as Record<string, unknown>;
+    } catch (err) {
+      this.logger.error(
+        `Cognito access token verification failed: ${(err as Error).message ?? err}`,
+      );
+      throw new UnauthorizedException('Cognito access token invalid');
+    }
+
+    // ── Step 3: cross-check subjects ─────────────────────────────────────
     const claimsSub = claims.sub as string | undefined;
     const accessSub = accessPayload.sub as string | undefined;
     if (!claimsSub || !accessSub || claimsSub !== accessSub) {
+      this.logger.error(
+        `ALB subject mismatch — oidcData.sub="${claimsSub}", accessToken.sub="${accessSub}"`,
+      );
       throw new UnauthorizedException('ALB and Cognito subject mismatch');
     }
 
@@ -73,6 +98,8 @@ export class TokenService {
       (claims['preferred_username'] as string) ||
       (claims.username as string) ||
       claimsSub;
+
+    this.logger.debug(`ALB auth OK — sub=${claimsSub}, username=${username}`);
 
     return {
       sub: claimsSub,
@@ -219,6 +246,11 @@ export class TokenService {
     const signedData = `${parts[0]}.${parts[1]}`;
     const signatureBuffer = Buffer.from(parts[2], 'base64url');
 
+    // ES256/P-256 raw R||S is always 64 bytes; log to confirm correct format.
+    this.logger.debug(
+      `ALB OIDC sig: part[2] len=${parts[2].length}, decoded bytes=${signatureBuffer.length}`,
+    );
+
     let signatureValid: boolean;
     try {
       const verifier = createVerify('SHA256');
@@ -233,6 +265,9 @@ export class TokenService {
     }
 
     if (!signatureValid) {
+      this.logger.error(
+        `ALB OIDC signature invalid — decoded sig bytes=${signatureBuffer.length}, kid=${kid}`,
+      );
       throw new UnauthorizedException('ALB OIDC signature invalid');
     }
 

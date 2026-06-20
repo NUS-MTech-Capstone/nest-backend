@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -10,6 +11,8 @@ import { TokenService } from './token.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
   constructor(
     private reflector: Reflector,
     private tokenService: TokenService,
@@ -33,9 +36,16 @@ export class JwtAuthGuard implements CanActivate {
       const accessToken = request.headers['x-amzn-oidc-accesstoken'] as
         | string
         | undefined;
+
       if (!oidcData || !accessToken) {
+        this.logger.error(
+          `Missing ALB headers — ` +
+            `x-amzn-oidc-data=${oidcData ? 'present' : 'MISSING'}, ` +
+            `x-amzn-oidc-accesstoken=${accessToken ? 'present' : 'MISSING'}`,
+        );
         throw new UnauthorizedException('Missing ALB authentication headers');
       }
+
       request.user = await this.tokenService.verifyAlbHeaders(
         oidcData,
         accessToken,
