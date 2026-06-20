@@ -24,7 +24,16 @@ import { StartSessionDto } from './dto/start-session.dto';
 export interface GatewaySessionResponse {
   websocketUrl: string;
   sessionToken: string;
+  /** Gateway-assigned session ID (used for rejoin / observe calls) */
   sessionId?: string;
+}
+
+export interface GatewayRejoinCandidate {
+  sessionId: string;
+  hostId: string;
+  crId?: string;
+  createdAt?: string;
+  [key: string]: unknown;
 }
 
 export interface SessionStartResponse extends GatewaySessionResponse {
@@ -104,9 +113,12 @@ export class SessionsService {
       sshPort: vm?.sshPort,
       crId: dto.crId || undefined,
       crNumber,
-      osUser: dto.osUser ?? 'root',
+      // osUser is stored for audit/display; the gateway determines the actual
+      // OS user from the CR or host configuration (per gateway API spec).
+      osUser: dto.osUser ?? '',
       createdBy: user.username,
       status: 'active' as const,
+      gatewaySessionId: gateway.sessionId ?? null,
       sessionToken: gateway.sessionToken,
       websocketUrl: gateway.websocketUrl,
       startedAt: new Date(),
@@ -274,6 +286,137 @@ export class SessionsService {
     }
   }
 
+  // ── Rejoin / Observe ─────────────────────────────────────────────────────
+
+  /** UC: Select Existing Session — query the gateway for sessions that the
+   *  caller can rejoin on a given host/CR pair. */
+  async getRejoinCandidates(
+    hostId: string,
+    crId: string | undefined,
+    user: AuthUser,
+  ): Promise<GatewayRejoinCandidate[]> {
+    this.ensureGatewayConfigured();
+    await this.validateAccessPolicy({ hostId, crId, connectionType: 'ssh' }, user);
+    await this.ensureAuthenticated();
+
+    const params = new URLSearchParams({ hostId });
+    if (crId) params.set('crId', crId);
+
+    const response = await fetch(
+      `${this.gatewayUrl}/sessions/rejoin-candidates?${params.toString()}`,
+      {
+        headers: { Authorization: `Bearer ${this.cachedToken}` },
+      },
+    );
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      this.logger.error(`Rejoin-candidates failed: HTTP ${response.status} — ${body}`);
+      throw new ServiceUnavailableException(
+        `SSH gateway returned ${response.status} for rejoin-candidates`,
+      );
+    }
+
+    return response.json() as Promise<GatewayRejoinCandidate[]>;
+  }
+
+  /** UC: Reconnect Session — tell the gateway to issue a new WebSocket ticket
+   *  for an existing session that the user previously owned. */
+  async rejoinSession(
+    id: string,
+    user: AuthUser,
+  ): Promise<{ websocketUrl: string; sessionToken: string; scopedJwt: string }> {
+    this.ensureGatewayConfigured();
+    const session = await this.getSession(id);
+
+    if (!session.gatewaySessionId) {
+      throw new ServiceUnavailableException(
+        'Session has no gateway reference — it may predate rejoin support',
+      );
+    }
+
+    await this.ensureAuthenticated();
+
+    let response = await this.callGatewayPost(
+      `/sessions/${session.gatewaySessionId}/rejoin`,
+    );
+    if (response.status === 401) {
+      this.cachedToken = null;
+      await this.ensureAuthenticated();
+      response = await this.callGatewayPost(
+        `/sessions/${session.gatewaySessionId}/rejoin`,
+      );
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      this.logger.error(`Rejoin failed: HTTP ${response.status} — ${body}`);
+      throw new ServiceUnavailableException(
+        `SSH gateway returned ${response.status} for rejoin`,
+      );
+    }
+
+    const gateway = await (response.json() as Promise<GatewaySessionResponse>);
+
+    const scopedJwt = sign(
+      {
+        sessionId: session.id,
+        hostId: session.hostId,
+        hostname: session.hostname,
+        crId: session.crId ?? null,
+        sub: user.sub,
+        username: user.username,
+        type: 'session-rejoin',
+      },
+      this.jwtSecret,
+      { expiresIn: '15m' },
+    );
+
+    await session.update({ lastActivityAt: new Date() });
+    this.logger.log(`Session ${id} rejoined by ${user.username}`);
+
+    return { websocketUrl: gateway.websocketUrl, sessionToken: gateway.sessionToken, scopedJwt };
+  }
+
+  /** UC: Observe Session — get a read-only WebSocket ticket for an active
+   *  session the caller has permission to watch. */
+  async observeSession(
+    id: string,
+    user: AuthUser,
+  ): Promise<{ websocketUrl: string; sessionToken: string }> {
+    this.ensureGatewayConfigured();
+    const session = await this.getSession(id);
+
+    if (!session.gatewaySessionId) {
+      throw new ServiceUnavailableException(
+        'Session has no gateway reference — it may predate observe support',
+      );
+    }
+
+    await this.ensureAuthenticated();
+
+    let response = await this.callGatewayPost(
+      `/sessions/${session.gatewaySessionId}/observe`,
+    );
+    if (response.status === 401) {
+      this.cachedToken = null;
+      await this.ensureAuthenticated();
+      response = await this.callGatewayPost(
+        `/sessions/${session.gatewaySessionId}/observe`,
+      );
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      this.logger.error(`Observe failed: HTTP ${response.status} — ${body}`);
+      throw new ServiceUnavailableException(
+        `SSH gateway returned ${response.status} for observe`,
+      );
+    }
+
+    const gateway = await (response.json() as Promise<GatewaySessionResponse>);
+    this.logger.log(`Session ${id} observed by ${user.username}`);
+    return { websocketUrl: gateway.websocketUrl, sessionToken: gateway.sessionToken };
+  }
+
   // ── SSH Gateway helpers ───────────────────────────────────────────────────
 
   private ensureGatewayConfigured(): void {
@@ -290,15 +433,15 @@ export class SessionsService {
   }
 
   private callSessionStart(dto: StartSessionDto): Promise<Response> {
+    // Gateway API spec: start body is { hostId, crId, connectionType } only.
+    // osUser is NOT forwarded — the gateway resolves the OS user from the CR
+    // or host configuration. We store osUser locally for audit purposes.
     const body: Record<string, string> = {
       hostId: dto.hostId,
       connectionType: dto.connectionType ?? 'ssh',
     };
     if (dto.crId) {
       body['crId'] = dto.crId;
-    }
-    if (dto.osUser) {
-      body['osUser'] = dto.osUser;
     }
     return fetch(`${this.gatewayUrl}/sessions/start`, {
       method: 'POST',
@@ -307,6 +450,17 @@ export class SessionsService {
         Authorization: `Bearer ${this.cachedToken}`,
       },
       body: JSON.stringify(body),
+    });
+  }
+
+  private callGatewayPost(path: string, body?: Record<string, unknown>): Promise<Response> {
+    return fetch(`${this.gatewayUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.cachedToken}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
     });
   }
 

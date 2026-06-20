@@ -28,6 +28,21 @@ export class SessionsController {
   }
 
   /**
+   * UC: Select Existing Session — query the gateway for sessions that can be
+   * rejoined for a given host/CR pair. Validates the caller's access policy
+   * before forwarding the request to the gateway.
+   */
+  @Get('rejoin-candidates')
+  @RequirePermission('access.launch')
+  getRejoinCandidates(
+    @Query('hostId') hostId: string,
+    @Query('crId') crId: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.sessions.getRejoinCandidates(hostId, crId, user);
+  }
+
+  /**
    * UC: Select Existing Session — list all active sessions across the platform.
    * Optionally filter by hostId to show sessions for a specific server.
    */
@@ -55,14 +70,23 @@ export class SessionsController {
   }
 
   /**
-   * UC: Reconnect Session — retrieve stored gateway credentials for a specific
-   * session so the terminal can reconnect without a new SSH gateway handshake.
-   * Issues a fresh short-lived scoped JWT.
+   * UC: Reconnect Session — ask the gateway to issue a fresh WebSocket ticket
+   * for an existing session. Returns { websocketUrl, sessionToken, scopedJwt }.
    */
-  @Get(':id/token')
+  @Post(':id/rejoin')
   @RequirePermission('access.launch')
-  getToken(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.sessions.getSessionToken(id, user);
+  rejoinSession(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.sessions.rejoinSession(id, user);
+  }
+
+  /**
+   * UC: Observe Session — get a read-only WebSocket ticket for watching an
+   * active session. Returns { websocketUrl, sessionToken }.
+   */
+  @Post(':id/observe')
+  @RequirePermission('access.view')
+  observeSession(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.sessions.observeSession(id, user);
   }
 
   /**

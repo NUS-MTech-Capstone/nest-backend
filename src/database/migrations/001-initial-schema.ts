@@ -210,6 +210,7 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
       allowNull: false,
       defaultValue: 'active',
     },
+    gatewaySessionId: { type: DataTypes.TEXT, allowNull: true },
     sessionToken: { type: DataTypes.TEXT, allowNull: true },
     websocketUrl: { type: DataTypes.TEXT, allowNull: true },
     scopedJwt: { type: DataTypes.TEXT, allowNull: true },

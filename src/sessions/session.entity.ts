@@ -53,6 +53,10 @@ export class Session extends Model<Session> {
   @Column({ type: DataType.TEXT, defaultValue: 'active' })
   status: SessionStatus;
 
+  /** Session ID assigned by the SSH gateway (used for rejoin/observe calls) */
+  @Column({ type: DataType.TEXT, allowNull: true })
+  gatewaySessionId?: string;
+
   /** Token returned by the SSH gateway for WebSocket auth */
   @Column({ type: DataType.TEXT, allowNull: true })
   sessionToken?: string;
