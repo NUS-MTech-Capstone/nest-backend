@@ -1,3 +1,4 @@
+import { createVerify } from 'crypto';
 import {
   BadRequestException,
   Injectable,
@@ -205,9 +206,39 @@ export class TokenService {
     }
 
     const publicKey = await this.getAlbPublicKey(region, kid);
-    return jwt.verify(sanitized, publicKey, {
-      algorithms: ['ES256'],
-    }) as jwt.JwtPayload;
+
+    // ── ES256 signature verification via Node.js crypto ───────────────────
+    // jwt.verify() re-parses the token internally using the jws library's own
+    // base64url decoder, which differs from Buffer('base64url') and throws
+    // "invalid token" for tokens that our manual parsing handles correctly.
+    // Using crypto directly bypasses that parsing layer entirely.
+    const signedData = `${parts[0]}.${parts[1]}`;
+    const signatureBuffer = Buffer.from(parts[2], 'base64url');
+
+    let signatureValid: boolean;
+    try {
+      const verifier = createVerify('SHA256');
+      verifier.update(signedData);
+      signatureValid = verifier.verify(publicKey, signatureBuffer);
+    } catch (e) {
+      this.logger.error(`ALB OIDC crypto verify error: ${e}`);
+      throw new UnauthorizedException('ALB OIDC signature verification failed');
+    }
+
+    if (!signatureValid) {
+      throw new UnauthorizedException('ALB OIDC signature invalid');
+    }
+
+    // ── Standard JWT claim validation ─────────────────────────────────────
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp !== undefined && payload.exp < now) {
+      throw new UnauthorizedException('ALB OIDC token expired');
+    }
+    if (payload.nbf !== undefined && payload.nbf > now + 5) {
+      throw new UnauthorizedException('ALB OIDC token not yet valid');
+    }
+
+    return payload;
   }
 
   private async getAlbPublicKey(region: string, kid: string): Promise<string> {
