@@ -35,10 +35,10 @@ export class VirtualMachine extends Model<
   @Column({ type: DataType.UUID })
   declare id: string;
 
-  @Column({ type: DataType.TEXT, unique: true })
+  @Column({ type: DataType.TEXT, unique: true, allowNull: false })
   hostname: string;
 
-  @Column({ type: DataType.TEXT })
+  @Column({ type: DataType.TEXT, allowNull: false })
   ipAddress: string;
 
   @Column({
@@ -47,7 +47,7 @@ export class VirtualMachine extends Model<
   })
   assetStatus: AssetStatus;
 
-  @Column({ type: DataType.TEXT })
+  @Column({ type: DataType.TEXT, allowNull: false })
   osVersion: string;
 
   @Default(22)
