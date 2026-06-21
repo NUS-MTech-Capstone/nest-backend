@@ -12,7 +12,6 @@ import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
-import { Op } from 'sequelize';
 import { AuthUser } from '../auth/auth.types';
 import { ChangeRequest, ChangeRequestStatus } from '../change-request/change-request.entity';
 import { ImplementerGroup } from '../implementer-group/implementer-group.entity';

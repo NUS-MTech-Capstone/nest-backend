@@ -1,9 +1,11 @@
 import {
   Column,
+  CreatedAt,
   DataType,
   Model,
   PrimaryKey,
   Table,
+  UpdatedAt,
 } from 'sequelize-typescript';
 
 export interface AccessPolicyCreationAttrs {
@@ -19,4 +21,12 @@ export class AccessPolicy extends Model<AccessPolicy, AccessPolicyCreationAttrs>
 
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
   permissions: string[];
+
+  @CreatedAt
+  @Column({ type: DataType.DATE })
+  declare createdAt: Date;
+
+  @UpdatedAt
+  @Column({ type: DataType.DATE })
+  declare updatedAt: Date;
 }

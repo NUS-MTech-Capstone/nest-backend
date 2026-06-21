@@ -27,4 +27,7 @@ async function migrate(): Promise<void> {
   }
 }
 
-void migrate();
+migrate().catch((err: unknown) => {
+  console.error('[migrate] FATAL: migration failed — app will not start', err);
+  process.exit(1);
+});

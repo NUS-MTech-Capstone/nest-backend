@@ -252,11 +252,15 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
     fields: ['triggeredAt'],
   });
 
+  // QueryInterface.bulkInsert does not go through Sequelize's model-layer type
+  // coercion, so JSONB values must be serialised manually — otherwise pg sends
+  // a plain JS array as a PostgreSQL array literal ({...}) which is invalid for
+  // a jsonb column and causes "invalid input syntax for type json".
   await context.bulkInsert(
     'access_policies',
     ROLES.map((role) => ({
       role,
-      permissions: DEFAULT_POLICY_MATRIX[role],
+      permissions: JSON.stringify(DEFAULT_POLICY_MATRIX[role]),
       createdAt: new Date(),
       updatedAt: new Date(),
     })),
@@ -264,13 +268,31 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
 };
 
 export const down: MigrationFn<QueryInterface> = async ({ context }) => {
-  await context.dropTable('alert_events');
-  await context.dropTable('access_sessions');
-  await context.dropTable('implementerGroupMembershipRequests');
-  await context.dropTable('implementerGroupMembers');
-  await context.dropTable('access_policies');
-  await context.dropTable('inventory_change_requests');
-  await context.dropTable('change_requests');
-  await context.dropTable('implementer_groups');
-  await context.dropTable('virtual_machines');
+  // Drop tables in reverse FK-dependency order.
+  // Use CASCADE so that any residual FK constraints don't block the drop.
+  await context.dropTable('alert_events', { cascade: true });
+  await context.dropTable('access_sessions', { cascade: true });
+  await context.dropTable('implementerGroupMembershipRequests', { cascade: true });
+  await context.dropTable('implementerGroupMembers', { cascade: true });
+  await context.dropTable('access_policies', { cascade: true });
+  await context.dropTable('inventory_change_requests', { cascade: true });
+  await context.dropTable('change_requests', { cascade: true });
+  await context.dropTable('implementer_groups', { cascade: true });
+  await context.dropTable('virtual_machines', { cascade: true });
+
+  // PostgreSQL ENUM types are not dropped with their table — they must be
+  // removed explicitly, otherwise a subsequent `up` fails with
+  // "type already exists".
+  const sequelize = context.sequelize;
+  const enumsToDrop = [
+    'enum_virtual_machines_assetStatus',
+    'enum_change_requests_status',
+    'enum_inventory_change_requests_action',
+    'enum_inventory_change_requests_status',
+    'enum_inventory_change_requests_assetStatus',
+    'enum_implementerGroupMembershipRequests_status',
+  ];
+  for (const enumName of enumsToDrop) {
+    await sequelize.query(`DROP TYPE IF EXISTS "${enumName}" CASCADE`);
+  }
 };
