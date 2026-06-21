@@ -83,9 +83,10 @@ migration job already ran.
 ## SSH gateway
 
 Terminal sessions proxy to an SSH gateway service. In production (`AUTH_MODE=alb`)
-the backend forwards the logged-in user's Cognito access token from
-`x-amzn-oidc-accesstoken` to the gateway — no separate service-account
-credentials are required.
+the backend forwards the logged-in user's ALB OIDC headers
+(`x-amzn-oidc-accesstoken`, `x-amzn-oidc-data`, `x-amzn-oidc-identity`) to the
+gateway, mirroring what the ALB injects on the public `/sessions` Ingress route.
+No separate service-account credentials are required.
 
 Configure the in-cluster gateway URL on the API deployment (Service
 `proxy-controlplane`, port `8080`, namespace `dendenmushi`):

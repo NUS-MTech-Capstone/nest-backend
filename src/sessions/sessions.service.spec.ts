@@ -15,6 +15,13 @@ import { ImplementerGroup } from '../implementer-group/implementer-group.entity'
 import { ImplementerGroupMember } from '../implementer-group/implementer-group-member.entity';
 import { VirtualMachine } from '../inventory/vm.entity';
 import type { AuthUser } from '../auth/auth.types';
+import type { GatewayUserAuth } from './gateway-auth';
+
+const userGatewayAuth: GatewayUserAuth = {
+  accessToken: 'user-cognito-token',
+  oidcData: 'claims-token',
+  oidcIdentity: 'user-sub',
+};
 
 const makeTokenResponse = (token = 'access-token-123', expiresIn = 3600) => ({
   AuthenticationResult: { AccessToken: token, ExpiresIn: expiresIn },
@@ -126,14 +133,27 @@ describe('SessionsService', () => {
       expect(mockSessionModel.create).toHaveBeenCalled();
     });
 
-    it('forwards a user access token without calling Cognito InitiateAuth', async () => {
+    it('forwards ALB OIDC headers without calling Cognito InitiateAuth', async () => {
       (global.fetch as jest.Mock).mockResolvedValue(makeFetchResponse(sessionPayload));
 
-      await service.startSession(dto, mockUser, 'user-cognito-token');
+      await service.startSession(dto, mockUser, userGatewayAuth);
 
       expect(mockSend).not.toHaveBeenCalled();
       const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
       expect(fetchCall[1].headers.Authorization).toBe('Bearer user-cognito-token');
+      expect(fetchCall[1].headers['x-amzn-oidc-accesstoken']).toBe('user-cognito-token');
+      expect(fetchCall[1].headers['x-amzn-oidc-data']).toBe('claims-token');
+      expect(fetchCall[1].headers['x-amzn-oidc-identity']).toBe('user-sub');
+    });
+
+    it('throws when the gateway rejects user credentials with 401', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(
+        makeFetchResponse('token expired', 401, false),
+      );
+
+      await expect(
+        service.startSession(dto, mockUser, userGatewayAuth),
+      ).rejects.toThrow('Cognito session expired');
     });
 
     it('does not forward osUser to the gateway (gateway resolves OS user from CR)', async () => {
@@ -360,7 +380,7 @@ describe('SessionsService', () => {
       );
 
       await expect(
-        svc.startSession(dto, mockUser, 'user-cognito-token'),
+        svc.startSession(dto, mockUser, userGatewayAuth),
       ).resolves.toEqual(
         expect.objectContaining({ websocketUrl: 'wss://gw', sessionToken: 't' }),
       );

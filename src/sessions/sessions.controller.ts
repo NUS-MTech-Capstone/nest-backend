@@ -13,15 +13,15 @@ import { CurrentUser, RequirePermission } from '../auth/decorators';
 import type { AuthUser } from '../auth/auth.types';
 import { SessionsService } from './sessions.service';
 import { StartSessionDto } from './dto/start-session.dto';
+import { extractGatewayUserAuth } from './gateway-auth';
 
 @Controller('sessions')
 export class SessionsController {
   constructor(private readonly sessions: SessionsService) {}
 
-  /** Cognito access token from ALB — forwarded to the in-cluster SSH gateway. */
-  private gatewayAccessToken(req: Request): string | undefined {
-    const token = req.headers['x-amzn-oidc-accesstoken'];
-    return typeof token === 'string' && token.length > 0 ? token : undefined;
+  /** ALB OIDC headers from the logged-in user — forwarded to the SSH gateway. */
+  private gatewayUserAuth(req: Request) {
+    return extractGatewayUserAuth(req);
   }
 
   /**
@@ -36,7 +36,7 @@ export class SessionsController {
     @CurrentUser() user: AuthUser,
     @Req() req: Request,
   ) {
-    return this.sessions.startSession(dto, user, this.gatewayAccessToken(req));
+    return this.sessions.startSession(dto, user, this.gatewayUserAuth(req));
   }
 
   /**
@@ -56,7 +56,7 @@ export class SessionsController {
       hostId,
       crId,
       user,
-      this.gatewayAccessToken(req),
+      this.gatewayUserAuth(req),
     );
   }
 
@@ -98,7 +98,7 @@ export class SessionsController {
     @CurrentUser() user: AuthUser,
     @Req() req: Request,
   ) {
-    return this.sessions.rejoinSession(id, user, this.gatewayAccessToken(req));
+    return this.sessions.rejoinSession(id, user, this.gatewayUserAuth(req));
   }
 
   /**
@@ -112,7 +112,7 @@ export class SessionsController {
     @CurrentUser() user: AuthUser,
     @Req() req: Request,
   ) {
-    return this.sessions.observeSession(id, user, this.gatewayAccessToken(req));
+    return this.sessions.observeSession(id, user, this.gatewayUserAuth(req));
   }
 
   /**

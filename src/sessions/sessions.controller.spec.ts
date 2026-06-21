@@ -41,13 +41,24 @@ describe('SessionsController', () => {
     controller = module.get(SessionsController);
   });
 
-  it('startSession delegates to service with dto and user', () => {
+  it('startSession forwards ALB auth headers to the service', () => {
     const dto = { hostId: 'host-1', crId: 'cr-1', osUser: 'root' };
     const response = { websocketUrl: 'wss://gw', sessionToken: 'tok', sessionId: 's1' };
     service.startSession.mockReturnValue(response);
+    const req = {
+      headers: {
+        'x-amzn-oidc-accesstoken': 'access-token',
+        'x-amzn-oidc-data': 'claims-token',
+        'x-amzn-oidc-identity': 'user-sub',
+      },
+    } as never;
 
-    expect(controller.startSession(dto, user)).toBe(response);
-    expect(service.startSession).toHaveBeenCalledWith(dto, user);
+    expect(controller.startSession(dto, user, req)).toBe(response);
+    expect(service.startSession).toHaveBeenCalledWith(dto, user, {
+      accessToken: 'access-token',
+      oidcData: 'claims-token',
+      oidcIdentity: 'user-sub',
+    });
   });
 
   it('listActive delegates with optional hostId filter', () => {
@@ -70,14 +81,6 @@ describe('SessionsController', () => {
     const session = { id: 's1' };
     service.getSession.mockReturnValue(session);
     expect(controller.getOne('s1')).toBe(session);
-  });
-
-  it('getToken delegates to service with id and user', () => {
-    const tokenResponse = { websocketUrl: 'wss://gw', sessionToken: 'tok', scopedJwt: 'jwt' };
-    service.getSessionToken.mockReturnValue(tokenResponse);
-
-    expect(controller.getToken('s1', user)).toBe(tokenResponse);
-    expect(service.getSessionToken).toHaveBeenCalledWith('s1', user);
   });
 
   it('endSession delegates to service with id and username', () => {
