@@ -126,7 +126,17 @@ describe('SessionsService', () => {
       expect(mockSessionModel.create).toHaveBeenCalled();
     });
 
-    it('includes osUser in the gateway request body when provided', async () => {
+    it('forwards a user access token without calling Cognito InitiateAuth', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(makeFetchResponse(sessionPayload));
+
+      await service.startSession(dto, mockUser, 'user-cognito-token');
+
+      expect(mockSend).not.toHaveBeenCalled();
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
+      expect(fetchCall[1].headers.Authorization).toBe('Bearer user-cognito-token');
+    });
+
+    it('does not forward osUser to the gateway (gateway resolves OS user from CR)', async () => {
       mockSend.mockResolvedValue(makeTokenResponse());
       (global.fetch as jest.Mock).mockResolvedValue(makeFetchResponse(sessionPayload));
 
@@ -134,7 +144,7 @@ describe('SessionsService', () => {
 
       const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
       const body = JSON.parse(fetchCall[1].body);
-      expect(body.osUser).toBe('osadm1');
+      expect(body).not.toHaveProperty('osUser');
     });
 
     it('omits osUser from the gateway request body when not provided', async () => {
@@ -310,6 +320,7 @@ describe('SessionsService', () => {
 
     it('throws ServiceUnavailableException when cognitoClientId is not configured', async () => {
       delete process.env.SSH_GATEWAY_COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_CLIENT_ID;
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -324,6 +335,36 @@ describe('SessionsService', () => {
       const svc = module.get(SessionsService);
 
       await expect(svc.startSession(dto, mockUser)).rejects.toThrow(ServiceUnavailableException);
+    });
+
+    it('requires only the gateway URL when a user access token is supplied', async () => {
+      delete process.env.SSH_GATEWAY_EMAIL;
+      delete process.env.SSH_GATEWAY_PASSWORD;
+      delete process.env.SSH_GATEWAY_COGNITO_CLIENT_ID;
+      delete process.env.COGNITO_CLIENT_ID;
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          SessionsService,
+          { provide: getModelToken(Session), useValue: mockSessionModel },
+          { provide: getModelToken(ChangeRequest), useValue: mockCrModel },
+          { provide: getModelToken(ImplementerGroup), useValue: mockGroupModel },
+          { provide: getModelToken(ImplementerGroupMember), useValue: mockMemberModel },
+          { provide: getModelToken(VirtualMachine), useValue: mockVmModel },
+        ],
+      }).compile();
+      const svc = module.get(SessionsService);
+
+      (global.fetch as jest.Mock).mockResolvedValue(
+        makeFetchResponse({ websocketUrl: 'wss://gw', sessionToken: 't' }),
+      );
+
+      await expect(
+        svc.startSession(dto, mockUser, 'user-cognito-token'),
+      ).resolves.toEqual(
+        expect.objectContaining({ websocketUrl: 'wss://gw', sessionToken: 't' }),
+      );
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     it('throws ServiceUnavailableException when Cognito InitiateAuth fails', async () => {

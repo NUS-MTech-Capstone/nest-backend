@@ -110,7 +110,11 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
     allowNull: true,
   });
   await backfillJsonb(context, 'change_requests', 'implementerGroupIds');
-  await addIfMissing(context, 'change_requests', 'scheduledDate', {
+  await addIfMissing(context, 'change_requests', 'implementationStartAt', {
+    type: DataTypes.DATE,
+    allowNull: true,
+  });
+  await addIfMissing(context, 'change_requests', 'implementationEndAt', {
     type: DataTypes.DATE,
     allowNull: true,
   });

@@ -80,6 +80,41 @@ The container entrypoint runs database migrations before starting the API.
 Set `SKIP_MIGRATIONS=true` to bypass migration on startup when a separate
 migration job already ran.
 
+## SSH gateway
+
+Terminal sessions proxy to an SSH gateway service. In production (`AUTH_MODE=alb`)
+the backend forwards the logged-in user's Cognito access token from
+`x-amzn-oidc-accesstoken` to the gateway — no separate service-account
+credentials are required.
+
+Configure the in-cluster gateway URL on the API deployment (Service
+`proxy-controlplane`, port `8080`, namespace `dendenmushi`):
+
+```bash
+SSH_GATEWAY_URL=http://proxy-controlplane:8080
+```
+
+If the API pod runs in another namespace, use the cluster DNS name:
+
+```bash
+SSH_GATEWAY_URL=http://proxy-controlplane.dendenmushi.svc.cluster.local:8080
+```
+
+Do not point `SSH_GATEWAY_URL` at the public ALB URL (`https://api.ddm.keiyam.me/sessions`).
+The backend calls `/sessions/start` itself and should reach the gateway pod directly.
+The Ingress Cognito auth on `/sessions` is for external clients only.
+
+Local development (`AUTH_MODE=dev`) does not receive ALB access tokens, so
+configure a Cognito service account instead:
+
+```bash
+SSH_GATEWAY_URL=http://localhost:8080
+SSH_GATEWAY_EMAIL=service-account@example.com
+SSH_GATEWAY_PASSWORD=...
+# Optional override; falls back to COGNITO_CLIENT_ID
+SSH_GATEWAY_COGNITO_CLIENT_ID=
+```
+
 ## API Specification
 
 The OpenAPI contract is checked in at `api/openapi.yaml` and is served

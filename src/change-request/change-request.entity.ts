@@ -35,7 +35,8 @@ export interface ChangeRequestCreationAttrs {
   vmIds?: string[];
   allowedRoles?: string[];
   implementerGroupIds?: string[];
-  scheduledDate?: Date;
+  implementationStartAt: Date;
+  implementationEndAt: Date;
 }
 
 @Table({ tableName: 'change_requests', timestamps: true })
@@ -92,9 +93,13 @@ export class ChangeRequest extends Model<ChangeRequest, ChangeRequestCreationAtt
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
   implementerGroupIds: string[];
 
-  /** Planned implementation date. Must not be in the past when set. */
-  @Column({ type: DataType.DATE, allowNull: true })
-  scheduledDate?: Date;
+  /** Planned implementation window start. Must not be in the past when set. */
+  @Column({ type: DataType.DATE, allowNull: false })
+  implementationStartAt: Date;
+
+  /** Planned implementation window end. Must be after implementationStartAt. */
+  @Column({ type: DataType.DATE, allowNull: false })
+  implementationEndAt: Date;
 
   @UpdatedAt
   @Column({ type: DataType.DATE })

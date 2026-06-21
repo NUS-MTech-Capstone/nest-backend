@@ -90,7 +90,8 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
       allowNull: false,
       defaultValue: [],
     },
-    scheduledDate: { type: DataTypes.DATE, allowNull: true },
+    implementationStartAt: { type: DataTypes.DATE, allowNull: false },
+    implementationEndAt: { type: DataTypes.DATE, allowNull: false },
     ...timestamps,
   });
 

@@ -6,7 +6,9 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { CurrentUser, RequirePermission } from '../auth/decorators';
 import type { AuthUser } from '../auth/auth.types';
 import { SessionsService } from './sessions.service';
@@ -16,6 +18,12 @@ import { StartSessionDto } from './dto/start-session.dto';
 export class SessionsController {
   constructor(private readonly sessions: SessionsService) {}
 
+  /** Cognito access token from ALB — forwarded to the in-cluster SSH gateway. */
+  private gatewayAccessToken(req: Request): string | undefined {
+    const token = req.headers['x-amzn-oidc-accesstoken'];
+    return typeof token === 'string' && token.length > 0 ? token : undefined;
+  }
+
   /**
    * UC: Start Session + Validate Access Policy + Issue Short-Lived JWT.
    * Validates CR/group access, proxies to the SSH gateway, persists the
@@ -23,8 +31,12 @@ export class SessionsController {
    */
   @Post('start')
   @RequirePermission('access.launch')
-  startSession(@Body() dto: StartSessionDto, @CurrentUser() user: AuthUser) {
-    return this.sessions.startSession(dto, user);
+  startSession(
+    @Body() dto: StartSessionDto,
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.sessions.startSession(dto, user, this.gatewayAccessToken(req));
   }
 
   /**
@@ -38,8 +50,14 @@ export class SessionsController {
     @Query('hostId') hostId: string,
     @Query('crId') crId: string | undefined,
     @CurrentUser() user: AuthUser,
+    @Req() req: Request,
   ) {
-    return this.sessions.getRejoinCandidates(hostId, crId, user);
+    return this.sessions.getRejoinCandidates(
+      hostId,
+      crId,
+      user,
+      this.gatewayAccessToken(req),
+    );
   }
 
   /**
@@ -75,8 +93,12 @@ export class SessionsController {
    */
   @Post(':id/rejoin')
   @RequirePermission('access.launch')
-  rejoinSession(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.sessions.rejoinSession(id, user);
+  rejoinSession(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.sessions.rejoinSession(id, user, this.gatewayAccessToken(req));
   }
 
   /**
@@ -85,8 +107,12 @@ export class SessionsController {
    */
   @Post(':id/observe')
   @RequirePermission('access.view')
-  observeSession(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.sessions.observeSession(id, user);
+  observeSession(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.sessions.observeSession(id, user, this.gatewayAccessToken(req));
   }
 
   /**

@@ -1,4 +1,4 @@
-import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsDateString, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateChangeRequestDto {
   @IsString()
@@ -34,8 +34,11 @@ export class CreateChangeRequestDto {
   @IsUUID('4', { each: true })
   implementerGroupIds?: string[];
 
-  /** ISO 8601 date string. Must not be in the past. */
-  @IsOptional()
-  @IsString()
-  scheduledDate?: string;
+  /** ISO 8601 datetime. Must not be in the past. */
+  @IsDateString()
+  implementationStartAt: string;
+
+  /** ISO 8601 datetime. Must be after implementationStartAt. */
+  @IsDateString()
+  implementationEndAt: string;
 }

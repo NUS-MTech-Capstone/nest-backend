@@ -19,6 +19,10 @@ import { ImplementerGroupMember } from '../implementer-group/implementer-group-m
 import { VirtualMachine } from '../inventory/vm.entity';
 import { Session } from './session.entity';
 import { StartSessionDto } from './dto/start-session.dto';
+import {
+  resolveGatewayCognitoClientId,
+  resolveGatewayUrl,
+} from './gateway-config';
 
 export interface GatewaySessionResponse {
   /** Gateway-assigned session ID */
@@ -67,37 +71,37 @@ export class SessionsService {
     @InjectModel(ImplementerGroupMember) private memberModel: typeof ImplementerGroupMember,
     @InjectModel(VirtualMachine) private vmModel: typeof VirtualMachine,
   ) {
-    this.gatewayUrl = process.env.SSH_GATEWAY_URL ?? '';
+    this.gatewayUrl = resolveGatewayUrl();
     this.gatewayEmail = process.env.SSH_GATEWAY_EMAIL ?? '';
     this.gatewayPassword = process.env.SSH_GATEWAY_PASSWORD ?? '';
     this.cognitoRegion =
       process.env.SSH_GATEWAY_COGNITO_REGION ??
       process.env.AWS_REGION ??
       'ap-southeast-1';
-    this.cognitoClientId = process.env.SSH_GATEWAY_COGNITO_CLIENT_ID ?? '';
+    this.cognitoClientId = resolveGatewayCognitoClientId();
     this.cognitoClientSecret =
-      process.env.SSH_GATEWAY_COGNITO_CLIENT_SECRET ?? '';
+      process.env.SSH_GATEWAY_COGNITO_CLIENT_SECRET ??
+      process.env.COGNITO_CLIENT_SECRET ??
+      '';
     this.jwtSecret = process.env.DEV_JWT_SECRET ?? 'dev-secret-change-me';
   }
 
   // ── Start Session ─────────────────────────────────────────────────────────
 
-  async startSession(dto: StartSessionDto, user: AuthUser): Promise<SessionStartResponse> {
-    this.ensureGatewayConfigured();
+  async startSession(
+    dto: StartSessionDto,
+    user: AuthUser,
+    userAccessToken?: string,
+  ): Promise<SessionStartResponse> {
+    this.ensureGatewayConfigured(!!userAccessToken);
 
     // 1. Validate Access Policy (UC: Validate Access Policy)
     const vm = await this.validateAccessPolicy(dto, user);
 
     // 2. Authenticate with SSH gateway and start connection (UC: Route to Access Proxy)
-    await this.ensureAuthenticated();
-    let response = await this.callSessionStart(dto);
-
-    if (response.status === 401) {
-      this.logger.warn('Gateway token expired, re-authenticating...');
-      this.cachedToken = null;
-      await this.ensureAuthenticated();
-      response = await this.callSessionStart(dto);
-    }
+    let response = await this.callGatewayWithAuth(userAccessToken, (token) =>
+      this.callSessionStart(dto, token),
+    );
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
@@ -305,27 +309,18 @@ export class SessionsService {
     hostId: string,
     crId: string | undefined,
     user: AuthUser,
+    userAccessToken?: string,
   ): Promise<{ sessions: GatewayRejoinCandidate[] }> {
-    this.ensureGatewayConfigured();
     await this.validateAccessPolicy({ hostId, crId, connectionType: 'ssh' }, user);
-    await this.ensureAuthenticated();
 
     const params = new URLSearchParams({ hostId });
     if (crId) params.set('crId', crId);
 
-    let response = await fetch(
-      `${this.gatewayUrl}/sessions/rejoin-candidates?${params.toString()}`,
-      { headers: { Authorization: `Bearer ${this.cachedToken}` } },
+    const response = await this.callGatewayWithAuth(userAccessToken, (token) =>
+      fetch(`${this.gatewayUrl}/sessions/rejoin-candidates?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     );
-
-    if (response.status === 401) {
-      this.cachedToken = null;
-      await this.ensureAuthenticated();
-      response = await fetch(
-        `${this.gatewayUrl}/sessions/rejoin-candidates?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${this.cachedToken}` } },
-      );
-    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
@@ -344,8 +339,8 @@ export class SessionsService {
   async rejoinSession(
     id: string,
     user: AuthUser,
+    userAccessToken?: string,
   ): Promise<{ websocketUrl: string; sessionToken: string; scopedJwt: string }> {
-    this.ensureGatewayConfigured();
     const session = await this.getSession(id);
 
     if (!session.gatewaySessionId) {
@@ -354,18 +349,9 @@ export class SessionsService {
       );
     }
 
-    await this.ensureAuthenticated();
-
-    let response = await this.callGatewayPost(
-      `/sessions/${session.gatewaySessionId}/rejoin`,
+    const response = await this.callGatewayWithAuth(userAccessToken, (token) =>
+      this.callGatewayPost(`/sessions/${session.gatewaySessionId}/rejoin`, token),
     );
-    if (response.status === 401) {
-      this.cachedToken = null;
-      await this.ensureAuthenticated();
-      response = await this.callGatewayPost(
-        `/sessions/${session.gatewaySessionId}/rejoin`,
-      );
-    }
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       this.logger.error(`Rejoin failed: HTTP ${response.status} — ${body}`);
@@ -401,8 +387,8 @@ export class SessionsService {
   async observeSession(
     id: string,
     user: AuthUser,
+    userAccessToken?: string,
   ): Promise<{ websocketUrl: string; sessionToken: string }> {
-    this.ensureGatewayConfigured();
     const session = await this.getSession(id);
 
     if (!session.gatewaySessionId) {
@@ -411,18 +397,9 @@ export class SessionsService {
       );
     }
 
-    await this.ensureAuthenticated();
-
-    let response = await this.callGatewayPost(
-      `/sessions/${session.gatewaySessionId}/observe`,
+    const response = await this.callGatewayWithAuth(userAccessToken, (token) =>
+      this.callGatewayPost(`/sessions/${session.gatewaySessionId}/observe`, token),
     );
-    if (response.status === 401) {
-      this.cachedToken = null;
-      await this.ensureAuthenticated();
-      response = await this.callGatewayPost(
-        `/sessions/${session.gatewaySessionId}/observe`,
-      );
-    }
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       this.logger.error(`Observe failed: HTTP ${response.status} — ${body}`);
@@ -438,12 +415,18 @@ export class SessionsService {
 
   // ── SSH Gateway helpers ───────────────────────────────────────────────────
 
-  private ensureGatewayConfigured(): void {
+  private ensureGatewayConfigured(useUserAccessToken = false): void {
     const missing: string[] = [];
-    if (!this.gatewayUrl) missing.push('SSH_GATEWAY_URL');
-    if (!this.gatewayEmail) missing.push('SSH_GATEWAY_EMAIL');
-    if (!this.gatewayPassword) missing.push('SSH_GATEWAY_PASSWORD');
-    if (!this.cognitoClientId) missing.push('SSH_GATEWAY_COGNITO_CLIENT_ID');
+    if (!this.gatewayUrl) {
+      missing.push('SSH_GATEWAY_URL (or SSH_GATEWAY_SERVICE_HOST/PORT)');
+    }
+    if (!useUserAccessToken) {
+      if (!this.gatewayEmail) missing.push('SSH_GATEWAY_EMAIL');
+      if (!this.gatewayPassword) missing.push('SSH_GATEWAY_PASSWORD');
+      if (!this.cognitoClientId) {
+        missing.push('SSH_GATEWAY_COGNITO_CLIENT_ID or COGNITO_CLIENT_ID');
+      }
+    }
     if (missing.length > 0) {
       throw new ServiceUnavailableException(
         `SSH gateway is not configured (${missing.join(', ')})`,
@@ -451,7 +434,41 @@ export class SessionsService {
     }
   }
 
-  private callSessionStart(dto: StartSessionDto): Promise<Response> {
+  private async resolveGatewayAuthToken(userAccessToken?: string): Promise<string> {
+    if (userAccessToken) {
+      return userAccessToken;
+    }
+    await this.ensureAuthenticated();
+    if (!this.cachedToken) {
+      throw new ServiceUnavailableException('SSH gateway authentication failed');
+    }
+    return this.cachedToken;
+  }
+
+  private async callGatewayWithAuth(
+    userAccessToken: string | undefined,
+    call: (token: string) => Promise<Response>,
+  ): Promise<Response> {
+    this.ensureGatewayConfigured(!!userAccessToken);
+    let token = await this.resolveGatewayAuthToken(userAccessToken);
+    let response = await call(token);
+
+    if (response.status === 401) {
+      if (userAccessToken) {
+        throw new ServiceUnavailableException(
+          'Cognito session expired — reload the page and try again',
+        );
+      }
+      this.logger.warn('Gateway service-account token expired, re-authenticating...');
+      this.cachedToken = null;
+      token = await this.resolveGatewayAuthToken();
+      response = await call(token);
+    }
+
+    return response;
+  }
+
+  private callSessionStart(dto: StartSessionDto, token: string): Promise<Response> {
     // Gateway API spec: start body is { hostId, crId, connectionType } only.
     // osUser is NOT forwarded — the gateway resolves the OS user from the CR
     // or host configuration. We store osUser locally for audit purposes.
@@ -466,18 +483,22 @@ export class SessionsService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.cachedToken}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     });
   }
 
-  private callGatewayPost(path: string, body?: Record<string, unknown>): Promise<Response> {
+  private callGatewayPost(
+    path: string,
+    token: string,
+    body?: Record<string, unknown>,
+  ): Promise<Response> {
     return fetch(`${this.gatewayUrl}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.cachedToken}`,
+        Authorization: `Bearer ${token}`,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -493,7 +514,9 @@ export class SessionsService {
     if (this.cachedToken && Date.now() < this.tokenExpiry) return;
 
     if (!this.cognitoClientId) {
-      throw new ServiceUnavailableException('SSH_GATEWAY_COGNITO_CLIENT_ID is not configured');
+      throw new ServiceUnavailableException(
+        'SSH gateway Cognito client is not configured (set SSH_GATEWAY_COGNITO_CLIENT_ID or COGNITO_CLIENT_ID)',
+      );
     }
 
     this.logger.log(

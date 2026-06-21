@@ -92,22 +92,52 @@ export class ChangeRequestService {
   }
 
   /**
-   * Parse an ISO date string and ensure it is not in the past.
+   * Parse an ISO datetime and ensure it is not in the past.
    * Allows a 60-second grace window for clock skew.
    */
-  private parseScheduledDate(raw: string | undefined): Date | undefined {
-    if (!raw) return undefined;
+  private parseRequiredDate(raw: string, field: string): Date {
     const date = new Date(raw);
     if (isNaN(date.getTime())) {
-      throw new UnprocessableEntityException('scheduledDate is not a valid date');
-    }
-    const sixtySecondsAgo = new Date(Date.now() - 60_000);
-    if (date < sixtySecondsAgo) {
-      throw new UnprocessableEntityException(
-        'scheduledDate cannot be set to a date in the past',
-      );
+      throw new UnprocessableEntityException(`${field} is not a valid date`);
     }
     return date;
+  }
+
+  private assertStartNotInPast(start: Date): void {
+    const sixtySecondsAgo = new Date(Date.now() - 60_000);
+    if (start < sixtySecondsAgo) {
+      throw new UnprocessableEntityException(
+        'implementationStartAt cannot be set to a date in the past',
+      );
+    }
+  }
+
+  private assertValidImplementationWindow(start: Date, end: Date): void {
+    if (end <= start) {
+      throw new UnprocessableEntityException(
+        'implementationEndAt must be after implementationStartAt',
+      );
+    }
+  }
+
+  private parseImplementationWindow(
+    startRaw: string,
+    endRaw: string,
+    validateStartNotInPast = true,
+  ): { implementationStartAt: Date; implementationEndAt: Date } {
+    const implementationStartAt = this.parseRequiredDate(
+      startRaw,
+      'implementationStartAt',
+    );
+    const implementationEndAt = this.parseRequiredDate(
+      endRaw,
+      'implementationEndAt',
+    );
+    if (validateStartNotInPast) {
+      this.assertStartNotInPast(implementationStartAt);
+    }
+    this.assertValidImplementationWindow(implementationStartAt, implementationEndAt);
+    return { implementationStartAt, implementationEndAt };
   }
 
   async create(
@@ -115,7 +145,11 @@ export class ChangeRequestService {
     user: AuthUser,
   ): Promise<ChangeRequest> {
     const requester = user.name ?? user.email ?? user.username;
-    const scheduledDate = this.parseScheduledDate(dto.scheduledDate);
+    const { implementationStartAt, implementationEndAt } =
+      this.parseImplementationWindow(
+        dto.implementationStartAt,
+        dto.implementationEndAt,
+      );
     return this.changeRequestModel.create({
       title: dto.title,
       description: dto.description,
@@ -126,7 +160,8 @@ export class ChangeRequestService {
       vmIds: dto.vmIds ?? [],
       allowedRoles: dto.allowedRoles ?? [],
       implementerGroupIds: dto.implementerGroupIds ?? [],
-      scheduledDate,
+      implementationStartAt,
+      implementationEndAt,
       status: ChangeRequestStatus.Pending,
       history: [
         {
@@ -163,8 +198,22 @@ export class ChangeRequestService {
     if (dto.allowedRoles !== undefined) request.allowedRoles = dto.allowedRoles;
     if (dto.implementerGroupIds !== undefined)
       request.implementerGroupIds = dto.implementerGroupIds;
-    if (dto.scheduledDate !== undefined)
-      request.scheduledDate = this.parseScheduledDate(dto.scheduledDate);
+    if (
+      dto.implementationStartAt !== undefined ||
+      dto.implementationEndAt !== undefined
+    ) {
+      const startRaw =
+        dto.implementationStartAt ?? request.implementationStartAt.toISOString();
+      const endRaw =
+        dto.implementationEndAt ?? request.implementationEndAt.toISOString();
+      const window = this.parseImplementationWindow(
+        startRaw,
+        endRaw,
+        dto.implementationStartAt !== undefined,
+      );
+      request.implementationStartAt = window.implementationStartAt;
+      request.implementationEndAt = window.implementationEndAt;
+    }
 
     request.history = [
       ...request.history,

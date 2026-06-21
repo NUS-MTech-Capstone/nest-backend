@@ -15,6 +15,11 @@ const user: AuthUser = {
   roles: ['Employee'],
 };
 
+const futureStart = (): string =>
+  new Date(Date.now() + 86_400_000).toISOString();
+const futureEnd = (): string =>
+  new Date(Date.now() + 172_800_000).toISOString();
+
 const makeCr = (overrides: Record<string, unknown> = {}): any => {
   const cr: any = {
     id: 'cr-1',
@@ -29,7 +34,8 @@ const makeCr = (overrides: Record<string, unknown> = {}): any => {
     allowedRoles: [],
     implementerGroupIds: [],
     history: [],
-    scheduledDate: undefined,
+    implementationStartAt: new Date(futureStart()),
+    implementationEndAt: new Date(futureEnd()),
     save: jest.fn(),
     ...overrides,
   };
@@ -154,7 +160,13 @@ describe('ChangeRequestService', () => {
   });
 
   describe('create', () => {
-    const dto = { title: 'Deploy patch', description: 'Patch', approvalRoute: 'Normal' };
+    const dto = {
+      title: 'Deploy patch',
+      description: 'Patch',
+      approvalRoute: 'Normal',
+      implementationStartAt: futureStart(),
+      implementationEndAt: futureEnd(),
+    };
 
     it('creates a Pending CR with requester taken from user.name', async () => {
       const created = makeCr();
@@ -182,25 +194,34 @@ describe('ChangeRequestService', () => {
       );
     });
 
-    it('stores a valid future scheduledDate', async () => {
-      const future = new Date(Date.now() + 86_400_000).toISOString();
+    it('stores a valid future implementation window', async () => {
       changeRequestModel.create.mockResolvedValue(makeCr());
-      await service.create({ ...dto, scheduledDate: future }, user);
+      await service.create(dto, user);
       expect(changeRequestModel.create).toHaveBeenCalledWith(
-        expect.objectContaining({ scheduledDate: expect.any(Date) }),
+        expect.objectContaining({
+          implementationStartAt: expect.any(Date),
+          implementationEndAt: expect.any(Date),
+        }),
       );
     });
 
-    it('throws UnprocessableEntityException for a past scheduledDate', async () => {
+    it('throws UnprocessableEntityException for a past implementationStartAt', async () => {
       const past = new Date(Date.now() - 120_000).toISOString();
-      await expect(service.create({ ...dto, scheduledDate: past }, user)).rejects.toThrow(
-        UnprocessableEntityException,
-      );
+      await expect(
+        service.create({ ...dto, implementationStartAt: past }, user),
+      ).rejects.toThrow(UnprocessableEntityException);
     });
 
-    it('throws UnprocessableEntityException for an invalid scheduledDate string', async () => {
+    it('throws UnprocessableEntityException when end is not after start', async () => {
+      const start = futureStart();
       await expect(
-        service.create({ ...dto, scheduledDate: 'not-a-date' }, user),
+        service.create({ ...dto, implementationStartAt: start, implementationEndAt: start }, user),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('throws UnprocessableEntityException for an invalid implementationStartAt string', async () => {
+      await expect(
+        service.create({ ...dto, implementationStartAt: 'not-a-date' }, user),
       ).rejects.toThrow(UnprocessableEntityException);
     });
 
@@ -243,13 +264,22 @@ describe('ChangeRequestService', () => {
       await expect(service.update('cr-1', {})).rejects.toThrow(BadRequestException);
     });
 
-    it('rejects a past scheduledDate during update', async () => {
+    it('rejects an invalid implementation window during update', async () => {
       const cr = makeCr();
       changeRequestModel.findByPk.mockResolvedValue(cr);
       const past = new Date(Date.now() - 120_000).toISOString();
-      await expect(service.update('cr-1', { scheduledDate: past })).rejects.toThrow(
-        UnprocessableEntityException,
-      );
+      await expect(
+        service.update('cr-1', { implementationStartAt: past }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('rejects an end datetime that is not after start during update', async () => {
+      const cr = makeCr();
+      changeRequestModel.findByPk.mockResolvedValue(cr);
+      const start = futureStart();
+      await expect(
+        service.update('cr-1', { implementationEndAt: start }),
+      ).rejects.toThrow(UnprocessableEntityException);
     });
   });
 

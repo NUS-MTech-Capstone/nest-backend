@@ -40,7 +40,12 @@ describe('initial database migration', () => {
         expect.arrayContaining(['tags']),
       );
       expect(tableColumns(context.createTable, 'change_requests')).toEqual(
-        expect.arrayContaining(['scheduledDate', 'allowedRoles', 'implementerGroupIds']),
+        expect.arrayContaining([
+          'implementationStartAt',
+          'implementationEndAt',
+          'allowedRoles',
+          'implementerGroupIds',
+        ]),
       );
       expect(tableColumns(context.createTable, 'access_sessions')).toEqual(
         expect.arrayContaining(['gatewaySessionId', 'sessionToken', 'websocketUrl', 'scopedJwt']),

@@ -735,8 +735,12 @@ components:
           type: array
           items:
             type: string
-        scheduledDate:
+        implementationStartAt:
           type: string
+          format: date-time
+        implementationEndAt:
+          type: string
+          format: date-time
     UpdateChangeRequest:
       type: object
       additionalProperties: true
