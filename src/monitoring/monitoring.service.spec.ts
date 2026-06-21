@@ -74,7 +74,33 @@ describe('MonitoringService', () => {
         region: 'ap-southeast-1',
         logGroup: '/ecs/api',
         sessionLogGroup: '/ecs/sessions',
+        awsAuthorized: true,
       });
+    });
+
+    it('marks awsAuthorized=false after CloudWatch returns AccessDenied', async () => {
+      process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
+      mockSendCw.mockRejectedValue(
+        Object.assign(new Error('not authorized'), { name: 'AccessDenied' }),
+      );
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MonitoringService,
+          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
+        ],
+      }).compile();
+      const configuredService = module.get(MonitoringService);
+
+      await configuredService.getAlarms();
+
+      expect(configuredService.getStatus()).toEqual(
+        expect.objectContaining({
+          configured: true,
+          awsAuthorized: false,
+          authorizationHint: expect.stringContaining('CloudWatch read permissions'),
+        }),
+      );
     });
   });
 

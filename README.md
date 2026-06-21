@@ -115,6 +115,56 @@ SSH_GATEWAY_PASSWORD=...
 SSH_GATEWAY_COGNITO_CLIENT_ID=
 ```
 
+## CloudWatch monitoring
+
+The monitoring API reads CloudWatch metrics, alarms, and log groups using the
+**nest-backend pod IAM role** (IRSA). Set these env vars on the deployment:
+
+```bash
+CLOUDWATCH_REGION=ap-southeast-1
+CLOUDWATCH_LOG_GROUP=/aws/containerinsights/dendenmushi-cluster-dev/application
+CLOUDWATCH_SESSION_LOG_GROUP=/aws/containerinsights/dendenmushi-cluster-dev/application
+CLOUDWATCH_NAMESPACE=DenDenMushi
+```
+
+Attach a read-only policy to the nest-backend role (for example
+`dendenmushi-nest-backend-dev`):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudWatchReadMetricsAndAlarms",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogsRead",
+      "Effect": "Allow",
+      "Action": [
+        "logs:FilterLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": [
+        "arn:aws:logs:ap-southeast-1:891377133321:log-group:/aws/containerinsights/dendenmushi-cluster-dev/application",
+        "arn:aws:logs:ap-southeast-1:891377133321:log-group:/aws/containerinsights/dendenmushi-cluster-dev/application:*"
+      ]
+    }
+  ]
+}
+```
+
+Adjust the account ID, region, and log group ARNs to match your cluster. Without
+these permissions the monitoring page loads but metrics/logs/alarms stay empty
+and the API reports `awsAuthorized: false`.
+
 ## API Specification
 
 The OpenAPI contract is checked in at `api/openapi.yaml` and is served

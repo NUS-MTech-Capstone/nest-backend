@@ -46,6 +46,9 @@ export interface MonitoringStatus {
   region?: string;
   logGroup?: string;
   sessionLogGroup?: string;
+  /** False after the first AWS AccessDenied response from CloudWatch/Logs. */
+  awsAuthorized?: boolean;
+  authorizationHint?: string;
 }
 
 @Injectable()
@@ -59,6 +62,8 @@ export class MonitoringService {
 
   private cloudwatch: CloudWatchClient | null = null;
   private cwLogs: CloudWatchLogsClient | null = null;
+  private authorizationFailed = false;
+  private authorizationHint?: string;
 
   constructor(
     @InjectModel(AlertEvent)
@@ -85,7 +90,33 @@ export class MonitoringService {
       region: this.region || undefined,
       logGroup: this.logGroup || undefined,
       sessionLogGroup: this.sessionLogGroup || undefined,
+      awsAuthorized: this.configured ? !this.authorizationFailed : undefined,
+      authorizationHint: this.authorizationFailed ? this.authorizationHint : undefined,
     };
+  }
+
+  private isAccessDenied(err: unknown): boolean {
+    const name = (err as { name?: string })?.name ?? '';
+    return name === 'AccessDenied' || name === 'AccessDeniedException';
+  }
+
+  private noteAuthorizationFailure(err: unknown, action: string): void {
+    if (!this.isAccessDenied(err)) {
+      this.logger.error(`Failed to ${action}: ${err}`);
+      return;
+    }
+
+    if (!this.authorizationFailed) {
+      this.authorizationFailed = true;
+      this.authorizationHint =
+        'Attach CloudWatch read permissions to the nest-backend IAM role (logs:FilterLogEvents, cloudwatch:GetMetricStatistics, cloudwatch:DescribeAlarms).';
+      this.logger.warn(
+        `CloudWatch access denied — ${this.authorizationHint} First failure while ${action}.`,
+      );
+      return;
+    }
+
+    this.logger.debug(`CloudWatch access denied while ${action}`);
   }
 
   // ── Alarms ────────────────────────────────────────────────────────────────
@@ -105,7 +136,7 @@ export class MonitoringService {
         updatedAt: a.StateUpdatedTimestamp?.toISOString() ?? new Date().toISOString(),
       }));
     } catch (err) {
-      this.logger.error(`Failed to fetch CloudWatch alarms: ${err}`);
+      this.noteAuthorizationFailure(err, 'fetch CloudWatch alarms');
       return [];
     }
   }
@@ -156,7 +187,7 @@ export class MonitoringService {
         current,
       };
     } catch (err) {
-      this.logger.error(`Failed to fetch metric ${metricName}: ${err}`);
+      this.noteAuthorizationFailure(err, `fetch metric ${metricName}`);
       return { name: metricName, namespace, unit: 'Count', dataPoints: [] };
     }
   }
@@ -199,7 +230,7 @@ export class MonitoringService {
         logStream: e.logStreamName ?? '',
       }));
     } catch (err) {
-      this.logger.error(`Failed to fetch logs from ${logGroupName}: ${err}`);
+      this.noteAuthorizationFailure(err, `fetch logs from ${logGroupName}`);
       return [];
     }
   }
