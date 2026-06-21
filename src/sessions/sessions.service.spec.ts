@@ -167,6 +167,17 @@ describe('SessionsService', () => {
       expect(body).not.toHaveProperty('osUser');
     });
 
+    it('forwards the gateway inventory host ID instead of the webapp VM UUID', async () => {
+      mockSend.mockResolvedValue(makeTokenResponse());
+      (global.fetch as jest.Mock).mockResolvedValue(makeFetchResponse(sessionPayload));
+
+      await service.startSession(dto, mockUser);
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.hostId).toBe(mockVm.hostname);
+    });
+
     it('omits osUser from the gateway request body when not provided', async () => {
       mockSend.mockResolvedValue(makeTokenResponse());
       (global.fetch as jest.Mock).mockResolvedValue(makeFetchResponse(sessionPayload));
@@ -219,6 +230,24 @@ describe('SessionsService', () => {
       await expect(
         service.startSession({ hostId: 'host-1', crId: '' }, nonAdmin),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('getRejoinCandidates', () => {
+    it('queries the gateway with the gateway inventory host ID', async () => {
+      const gatewayResponse = { sessions: [] };
+      (global.fetch as jest.Mock).mockResolvedValue(makeFetchResponse(gatewayResponse));
+
+      await expect(
+        service.getRejoinCandidates('host-1', 'cr-1', mockUser, userGatewayAuth),
+      ).resolves.toEqual(gatewayResponse);
+
+      const [url] = (global.fetch as jest.Mock).mock.calls[0];
+      expect(url).toBe(
+        `https://gateway.test/sessions/rejoin-candidates?hostId=${encodeURIComponent(
+          mockVm.hostname,
+        )}&crId=cr-1`,
+      );
     });
   });
 

@@ -105,6 +105,22 @@ Do not point `SSH_GATEWAY_URL` at the public ALB URL (`https://api.ddm.keiyam.me
 The backend calls `/sessions/start` itself and should reach the gateway pod directly.
 The Ingress Cognito auth on `/sessions` is for external clients only.
 
+The webapp stores its own UUID for each `virtual_machines.id`. When calling the
+SSH gateway, the backend translates that UUID to `virtual_machines.hostname`.
+For the current static STS inventory, the VM hostname must therefore match the
+gateway host ID, for example `host-dev-1`.
+
+The backend also exposes the STS server-inventory contract:
+
+```http
+GET /servers/{hostId}
+```
+
+STS should configure `SERVER_INVENTORY_URL=http://nest-backend:3000`.
+The endpoint resolves `{hostId}` by VM UUID or hostname, returns address data
+from `virtual_machines`, and enriches SSH-only metadata from
+`SERVER_INVENTORY_STATIC_JSON` or the `SERVER_INVENTORY_DEFAULT_*` env vars.
+
 Local development (`AUTH_MODE=dev`) does not receive ALB access tokens, so
 configure a Cognito service account instead:
 

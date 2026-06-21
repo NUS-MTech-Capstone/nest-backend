@@ -29,6 +29,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProbeResponse"
+  /servers/{hostId}:
+    get:
+      summary: Internal STS server inventory lookup
+      description: Resolves a webapp VM UUID or gateway host ID to the SSH target metadata required by STS.
+      security: []
+      parameters:
+        - name: hostId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Server inventory record.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - hostId
+                  - hostname
+                  - address
+                  - status
+                  - connectionType
+                  - username
+                  - credentialSecretId
+                  - hostPublicKey
+                properties:
+                  hostId:
+                    type: string
+                  hostname:
+                    type: string
+                  address:
+                    type: string
+                  status:
+                    type: string
+                  connectionType:
+                    type: string
+                    enum: [ssh]
+                  username:
+                    type: string
+                  credentialSecretId:
+                    type: string
+                  hostPublicKey:
+                    type: string
+                  automation:
+                    type: object
+                    additionalProperties: true
+        "404":
+          description: Server not found.
+        "500":
+          description: Server exists but SSH inventory metadata is incomplete.
   /ddm/auth/config:
     get:
       summary: Get frontend authentication configuration

@@ -101,10 +101,11 @@ export class SessionsService {
 
     // 1. Validate Access Policy (UC: Validate Access Policy)
     const vm = await this.validateAccessPolicy(dto, user);
+    const gatewayHostId = this.gatewayHostIdFor(dto.hostId, vm);
 
     // 2. Authenticate with SSH gateway and start connection (UC: Route to Access Proxy)
     let response = await this.callGatewayWithAuth(userAuth, (headers) =>
-      this.callSessionStart(dto, headers),
+      this.callSessionStart(dto, gatewayHostId, headers),
     );
 
     if (!response.ok) {
@@ -316,8 +317,10 @@ export class SessionsService {
     userAuth?: GatewayUserAuth,
   ): Promise<{ sessions: GatewayRejoinCandidate[] }> {
     await this.validateAccessPolicy({ hostId, crId, connectionType: 'ssh' }, user);
+    const vm = await this.vmModel.findByPk(hostId);
+    const gatewayHostId = this.gatewayHostIdFor(hostId, vm);
 
-    const params = new URLSearchParams({ hostId });
+    const params = new URLSearchParams({ hostId: gatewayHostId });
     if (crId) params.set('crId', crId);
 
     const response = await this.callGatewayWithAuth(userAuth, (headers) =>
@@ -498,13 +501,14 @@ export class SessionsService {
 
   private callSessionStart(
     dto: StartSessionDto,
+    gatewayHostId: string,
     headers: Record<string, string>,
   ): Promise<Response> {
     // Gateway API spec: start body is { hostId, crId, connectionType } only.
     // osUser is NOT forwarded — the gateway resolves the OS user from the CR
     // or host configuration. We store osUser locally for audit purposes.
     const body: Record<string, string> = {
-      hostId: dto.hostId,
+      hostId: gatewayHostId,
       connectionType: dto.connectionType ?? 'ssh',
     };
     if (dto.crId) {
@@ -533,6 +537,10 @@ export class SessionsService {
       },
       body: body ? JSON.stringify(body) : undefined,
     });
+  }
+
+  private gatewayHostIdFor(webappHostId: string, vm: VirtualMachine | null): string {
+    return vm?.hostname || webappHostId;
   }
 
   private computeSecretHash(username: string): string {

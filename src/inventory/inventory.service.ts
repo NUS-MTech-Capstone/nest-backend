@@ -26,6 +26,14 @@ export class InventoryService {
     return this.virtualMachineModel.findOne({ where: { hostname }, plain: true });
   }
 
+  async findByIdOrHostname(hostId: string): Promise<VirtualMachine | null> {
+    const byId = await this.findOne(hostId);
+    if (byId) {
+      return byId;
+    }
+    return this.findByHostname(hostId);
+  }
+
   create(createVmDto: CreateVmDto): Promise<VirtualMachine> {
     return this.virtualMachineModel.create({
       hostname: createVmDto.hostname,
