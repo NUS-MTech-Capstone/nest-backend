@@ -451,10 +451,18 @@ export class SessionsService {
     call: (headers: Record<string, string>) => Promise<Response>,
   ): Promise<Response> {
     this.ensureGatewayConfigured(!!userAuth);
-    let bearerToken = userAuth
-      ? userAuth.accessToken
-      : await this.resolveGatewayAuthToken();
+
+    if (userAuth && !userAuth.oidcData) {
+      throw new ServiceUnavailableException(
+        'Missing ALB OIDC claims header — reload the page and sign in again',
+      );
+    }
+
+    let bearerToken = userAuth ? undefined : await this.resolveGatewayAuthToken();
     let headers = buildGatewayAuthHeaders(bearerToken, userAuth);
+    this.logger.debug(
+      `Gateway auth: ${userAuth ? 'alb-oidc' : 'service-account'} headers=${Object.keys(headers).join(',')}`,
+    );
     let response = await call(headers);
 
     if (response.status === 401) {

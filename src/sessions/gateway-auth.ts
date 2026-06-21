@@ -30,22 +30,26 @@ export function extractGatewayUserAuth(req: Request): GatewayUserAuth | undefine
 
 /** Headers for server-to-server gateway calls (mirrors what ALB injects externally). */
 export function buildGatewayAuthHeaders(
-  bearerToken: string,
+  bearerToken: string | undefined,
   userAuth?: GatewayUserAuth,
 ): Record<string, string> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${bearerToken}`,
-  };
+  // ALB-authenticated gateway traffic carries OIDC headers only — not Authorization.
+  if (userAuth) {
+    const headers: Record<string, string> = {
+      'x-amzn-oidc-accesstoken': userAuth.accessToken,
+    };
+    if (userAuth.oidcData) {
+      headers['x-amzn-oidc-data'] = userAuth.oidcData;
+    }
+    if (userAuth.oidcIdentity) {
+      headers['x-amzn-oidc-identity'] = userAuth.oidcIdentity;
+    }
+    return headers;
+  }
 
-  if (userAuth?.accessToken) {
-    headers['x-amzn-oidc-accesstoken'] = userAuth.accessToken;
-  }
-  if (userAuth?.oidcData) {
-    headers['x-amzn-oidc-data'] = userAuth.oidcData;
-  }
-  if (userAuth?.oidcIdentity) {
-    headers['x-amzn-oidc-identity'] = userAuth.oidcIdentity;
+  if (!bearerToken) {
+    return {};
   }
 
-  return headers;
+  return { Authorization: `Bearer ${bearerToken}` };
 }

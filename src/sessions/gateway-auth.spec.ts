@@ -41,18 +41,23 @@ describe('gateway-auth', () => {
   });
 
   describe('buildGatewayAuthHeaders', () => {
-    it('forwards Bearer and ALB OIDC headers together', () => {
+    it('forwards ALB OIDC headers without Authorization for user auth', () => {
       expect(
-        buildGatewayAuthHeaders('bearer-token', {
+        buildGatewayAuthHeaders(undefined, {
           accessToken: 'access-token',
           oidcData: 'claims-token',
           oidcIdentity: 'user-sub',
         }),
       ).toEqual({
-        Authorization: 'Bearer bearer-token',
         'x-amzn-oidc-accesstoken': 'access-token',
         'x-amzn-oidc-data': 'claims-token',
         'x-amzn-oidc-identity': 'user-sub',
+      });
+    });
+
+    it('uses Authorization Bearer for service-account auth', () => {
+      expect(buildGatewayAuthHeaders('service-token')).toEqual({
+        Authorization: 'Bearer service-token',
       });
     });
   });

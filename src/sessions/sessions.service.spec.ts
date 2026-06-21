@@ -140,7 +140,7 @@ describe('SessionsService', () => {
 
       expect(mockSend).not.toHaveBeenCalled();
       const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
-      expect(fetchCall[1].headers.Authorization).toBe('Bearer user-cognito-token');
+      expect(fetchCall[1].headers.Authorization).toBeUndefined();
       expect(fetchCall[1].headers['x-amzn-oidc-accesstoken']).toBe('user-cognito-token');
       expect(fetchCall[1].headers['x-amzn-oidc-data']).toBe('claims-token');
       expect(fetchCall[1].headers['x-amzn-oidc-identity']).toBe('user-sub');
