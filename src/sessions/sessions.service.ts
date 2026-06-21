@@ -22,23 +22,27 @@ import { Session } from './session.entity';
 import { StartSessionDto } from './dto/start-session.dto';
 
 export interface GatewaySessionResponse {
-  websocketUrl: string;
+  /** Gateway-assigned session ID */
+  sessionId: string;
   sessionToken: string;
-  /** Gateway-assigned session ID (used for rejoin / observe calls) */
-  sessionId?: string;
+  websocketUrl: string;
+  /** ISO-8601 timestamp when the session / token expires */
+  expiresAt: string;
 }
 
+/** Matches the gateway spec's SessionCandidate schema. */
 export interface GatewayRejoinCandidate {
   sessionId: string;
   hostId: string;
-  crId?: string;
-  createdAt?: string;
-  [key: string]: unknown;
+  crId: string;
+  connectionType: string;
+  status: string;
+  createdAt: string;
+  lastHeartbeatAt: string;
+  leaseExpiresAt: string;
 }
 
 export interface SessionStartResponse extends GatewaySessionResponse {
-  /** Our internal DB record ID */
-  sessionId: string;
   /** Short-lived scoped JWT issued by this platform */
   scopedJwt: string;
 }
@@ -118,7 +122,7 @@ export class SessionsService {
       osUser: dto.osUser ?? '',
       createdBy: user.username,
       status: 'active' as const,
-      gatewaySessionId: gateway.sessionId ?? null,
+      gatewaySessionId: gateway.sessionId,
       sessionToken: gateway.sessionToken,
       websocketUrl: gateway.websocketUrl,
       startedAt: new Date(),
@@ -142,7 +146,15 @@ export class SessionsService {
     await record.update({ scopedJwt });
 
     this.logger.log(`Session started: ${record.id} by ${user.username} on ${vm?.hostname}`);
-    return { ...gateway, sessionId: record.id, scopedJwt };
+    // Return the gateway fields but override sessionId with our internal record ID
+    // so the frontend uses the DDM session ID for all subsequent API calls.
+    return {
+      sessionId: record.id,
+      sessionToken: gateway.sessionToken,
+      websocketUrl: gateway.websocketUrl,
+      expiresAt: gateway.expiresAt,
+      scopedJwt,
+    };
   }
 
   // ── Validate Access Policy ────────────────────────────────────────────────
@@ -294,7 +306,7 @@ export class SessionsService {
     hostId: string,
     crId: string | undefined,
     user: AuthUser,
-  ): Promise<GatewayRejoinCandidate[]> {
+  ): Promise<{ sessions: GatewayRejoinCandidate[] }> {
     this.ensureGatewayConfigured();
     await this.validateAccessPolicy({ hostId, crId, connectionType: 'ssh' }, user);
     await this.ensureAuthenticated();
@@ -302,12 +314,19 @@ export class SessionsService {
     const params = new URLSearchParams({ hostId });
     if (crId) params.set('crId', crId);
 
-    const response = await fetch(
+    let response = await fetch(
       `${this.gatewayUrl}/sessions/rejoin-candidates?${params.toString()}`,
-      {
-        headers: { Authorization: `Bearer ${this.cachedToken}` },
-      },
+      { headers: { Authorization: `Bearer ${this.cachedToken}` } },
     );
+
+    if (response.status === 401) {
+      this.cachedToken = null;
+      await this.ensureAuthenticated();
+      response = await fetch(
+        `${this.gatewayUrl}/sessions/rejoin-candidates?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${this.cachedToken}` } },
+      );
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
@@ -317,7 +336,8 @@ export class SessionsService {
       );
     }
 
-    return response.json() as Promise<GatewayRejoinCandidate[]>;
+    // Gateway spec: RejoinCandidatesResponse = { sessions: SessionCandidate[] }
+    return response.json() as Promise<{ sessions: GatewayRejoinCandidate[] }>;
   }
 
   /** UC: Reconnect Session — tell the gateway to issue a new WebSocket ticket
