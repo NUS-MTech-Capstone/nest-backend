@@ -75,6 +75,35 @@ describe('InventoryService', () => {
     await expect(service.findByHostname('web-01')).resolves.toBe(vm);
   });
 
+  it('findByIdOrHostname looks up by hostname without querying UUID pk', async () => {
+    const vm = makeVm({ hostname: 'host-dev-1' });
+    virtualMachineModel.findOne.mockResolvedValue(vm);
+
+    await expect(service.findByIdOrHostname('host-dev-1')).resolves.toBe(vm);
+    expect(virtualMachineModel.findByPk).not.toHaveBeenCalled();
+    expect(virtualMachineModel.findOne).toHaveBeenCalledWith({
+      where: { hostname: 'host-dev-1' },
+      plain: true,
+    });
+  });
+
+  it('findByIdOrHostname prefers UUID lookup when hostId is a UUID', async () => {
+    const vm = makeVm({
+      id: '35ff0d89-72ca-4f9a-be26-6f297515127b',
+      hostname: 'host-dev-1',
+    });
+    virtualMachineModel.findByPk.mockResolvedValue(vm);
+
+    await expect(
+      service.findByIdOrHostname('35ff0d89-72ca-4f9a-be26-6f297515127b'),
+    ).resolves.toBe(vm);
+    expect(virtualMachineModel.findByPk).toHaveBeenCalledWith(
+      '35ff0d89-72ca-4f9a-be26-6f297515127b',
+      { plain: true },
+    );
+    expect(virtualMachineModel.findOne).not.toHaveBeenCalled();
+  });
+
   it('create persists a new VM with defaults', async () => {
     const created = makeVm();
     virtualMachineModel.create.mockResolvedValue(created);

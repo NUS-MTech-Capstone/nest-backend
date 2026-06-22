@@ -5,6 +5,10 @@ import { UpdateVmDto } from './dto/update-vm.dto';
 import { SyncVmRecord, SyncResult } from './dto/sync-vms.dto';
 import { AssetStatus, VirtualMachine } from './vm.entity';
 
+/** Matches PostgreSQL UUID primary keys; avoids invalid casts on hostname lookups. */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class InventoryService {
   constructor(
@@ -27,9 +31,11 @@ export class InventoryService {
   }
 
   async findByIdOrHostname(hostId: string): Promise<VirtualMachine | null> {
-    const byId = await this.findOne(hostId);
-    if (byId) {
-      return byId;
+    if (UUID_PATTERN.test(hostId)) {
+      const byId = await this.findOne(hostId);
+      if (byId) {
+        return byId;
+      }
     }
     return this.findByHostname(hostId);
   }
