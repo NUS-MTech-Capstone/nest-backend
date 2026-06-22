@@ -61,4 +61,19 @@ describe('StsChangeRequestController', () => {
     await expect(controller.findOne('missing')).rejects.toThrow(NotFoundException);
     expect(vmModel.findAll).not.toHaveBeenCalled();
   });
+
+  it('returns an empty hostIds list when the change request has no VMs', async () => {
+    changeRequestService.findOne.mockResolvedValue({
+      id: 'cr-empty',
+      status: ChangeRequestStatus.Approved,
+      vmIds: [],
+    });
+
+    await expect(controller.findOne('cr-empty')).resolves.toEqual({
+      crId: 'cr-empty',
+      status: ChangeRequestStatus.Approved,
+      hostIds: [],
+    });
+    expect(vmModel.findAll).not.toHaveBeenCalled();
+  });
 });

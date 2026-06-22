@@ -3,18 +3,21 @@ import { up } from './004-implementation-window-columns';
 describe('004 implementation window migration', () => {
   it('adds columns, backfills from scheduledDate, and enforces NOT NULL', async () => {
     const query = jest.fn().mockResolvedValue(undefined);
+    let hasStart = false;
+    let hasEnd = false;
     const context = {
-      describeTable: jest
-        .fn()
-        .mockResolvedValueOnce({
+      describeTable: jest.fn().mockImplementation(async () => {
+        const desc: Record<string, { type: string }> = {
           scheduledDate: { type: 'DATE' },
-        })
-        .mockResolvedValueOnce({
-          scheduledDate: { type: 'DATE' },
-          implementationStartAt: { type: 'DATE' },
-          implementationEndAt: { type: 'DATE' },
-        }),
-      addColumn: jest.fn().mockResolvedValue(undefined),
+        };
+        if (hasStart) desc.implementationStartAt = { type: 'DATE' };
+        if (hasEnd) desc.implementationEndAt = { type: 'DATE' };
+        return desc;
+      }),
+      addColumn: jest.fn().mockImplementation(async (_table, column) => {
+        if (column === 'implementationStartAt') hasStart = true;
+        if (column === 'implementationEndAt') hasEnd = true;
+      }),
       changeColumn: jest.fn().mockResolvedValue(undefined),
       sequelize: { query },
     };
@@ -42,5 +45,26 @@ describe('004 implementation window migration', () => {
       'implementationEndAt',
       expect.objectContaining({ allowNull: false }),
     );
+  });
+
+  it('backfills from createdAt when scheduledDate is absent', async () => {
+    const query = jest.fn().mockResolvedValue(undefined);
+    const context = {
+      describeTable: jest.fn().mockResolvedValue({
+        implementationStartAt: { type: 'DATE' },
+        implementationEndAt: { type: 'DATE' },
+      }),
+      addColumn: jest.fn(),
+      changeColumn: jest.fn().mockResolvedValue(undefined),
+      sequelize: { query },
+    };
+
+    await up({ context } as never);
+
+    expect(context.addColumn).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(String(query.mock.calls[0][0])).toContain('"createdAt"');
+    expect(String(query.mock.calls[0][0])).not.toContain('"scheduledDate"');
+    expect(context.changeColumn).toHaveBeenCalledTimes(2);
   });
 });

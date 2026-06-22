@@ -104,6 +104,18 @@ describe('InventoryService', () => {
     expect(virtualMachineModel.findOne).not.toHaveBeenCalled();
   });
 
+  it('findByIdOrHostname returns null when neither UUID nor hostname matches', async () => {
+    virtualMachineModel.findByPk.mockResolvedValue(null);
+    virtualMachineModel.findOne.mockResolvedValue(null);
+
+    await expect(service.findByIdOrHostname('missing-host')).resolves.toBeNull();
+    expect(virtualMachineModel.findByPk).not.toHaveBeenCalled();
+    expect(virtualMachineModel.findOne).toHaveBeenCalledWith({
+      where: { hostname: 'missing-host' },
+      plain: true,
+    });
+  });
+
   it('create persists a new VM with defaults', async () => {
     const created = makeVm();
     virtualMachineModel.create.mockResolvedValue(created);

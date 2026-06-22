@@ -47,6 +47,16 @@ describe('ApiVersionGuard', () => {
     expect(guard.canActivate(createContext('/readyz'))).toBe(true);
   });
 
+  it('allows @Public server inventory routes without version header', () => {
+    reflector.getAllAndOverride.mockReturnValue(true);
+
+    expect(guard.canActivate(createContext('/servers/host-dev-1'))).toBe(true);
+    expect(reflector.getAllAndOverride).toHaveBeenCalledWith(
+      IS_PUBLIC_KEY,
+      expect.any(Array),
+    );
+  });
+
   it('allows requests with supported version header', () => {
     expect(
       guard.canActivate(

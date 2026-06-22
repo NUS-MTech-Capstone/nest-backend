@@ -166,9 +166,9 @@ describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
   it('handles tokens with embedded whitespace (proxy header folding)', async () => {
     const now = Math.floor(Date.now() / 1000);
     const token = makeAlbToken({ sub: 'user-abc', exp: now + 3600 }, PRIVATE_KEY_PEM);
-    // Simulate a proxy inserting a newline inside the token.
+    // Simulate a proxy folding whitespace inside the header segment only.
     const parts = token.split('.');
-    const folded = `${parts[0]}\n ${parts[1]}.${parts[2]}`;
+    const folded = `${parts[0].slice(0, 10)}\n${parts[0].slice(10)}.${parts[1]}.${parts[2]}`;
 
     const svc = makeService();
     const payload = await (svc as any).verifyAlbOidcDataToken(folded);

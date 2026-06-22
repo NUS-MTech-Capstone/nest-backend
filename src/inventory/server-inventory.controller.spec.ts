@@ -79,6 +79,27 @@ describe('ServerInventoryController', () => {
     expect(inventoryService.findByIdOrHostname).toHaveBeenCalledWith(vm.id);
   });
 
+  it('resolves static SSH metadata keyed by VM UUID', async () => {
+    process.env.SERVER_INVENTORY_STATIC_JSON = JSON.stringify({
+      [vm.id]: {
+        address: '10.0.10.203:22',
+        username: 'ec2-user',
+        connectionType: 'ssh',
+        credentialSecretId: 'arn:aws:secretsmanager:secret',
+        hostPublicKey: 'ssh-ed25519 AAAATEST',
+      },
+    });
+    inventoryService.findByIdOrHostname.mockResolvedValue(vm);
+
+    await expect(controller.getServer(vm.id)).resolves.toEqual(
+      expect.objectContaining({
+        hostId: 'host-dev-1',
+        username: 'ec2-user',
+        credentialSecretId: 'arn:aws:secretsmanager:secret',
+      }),
+    );
+  });
+
   it('falls back to default SSH metadata env vars', async () => {
     delete process.env.SERVER_INVENTORY_STATIC_JSON;
     process.env.SERVER_INVENTORY_DEFAULT_USERNAME = 'ec2-user';
