@@ -81,6 +81,37 @@ paths:
           description: Server not found.
         "500":
           description: Server exists but SSH inventory metadata is incomplete.
+  /sts/change-requests/{crId}:
+    get:
+      summary: Internal STS change-request lookup
+      description: Resolves a change request to approval status and gateway host IDs in scope.
+      security: []
+      parameters:
+        - name: crId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Change-request authorization metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [crId, status, hostIds]
+                properties:
+                  crId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [Pending, Approved, Rejected]
+                  hostIds:
+                    type: array
+                    items:
+                      type: string
+        "404":
+          description: Change request not found.
   /ddm/auth/config:
     get:
       summary: Get frontend authentication configuration

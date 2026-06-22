@@ -45,6 +45,7 @@ async function bootstrap() {
       { path: 'readyz', method: RequestMethod.GET },
       { path: 'openapi.yaml', method: RequestMethod.GET },
       { path: 'servers/:hostId', method: RequestMethod.GET },
+      { path: 'sts/change-requests/:id', method: RequestMethod.GET },
     ],
   });
   app.useGlobalPipes(

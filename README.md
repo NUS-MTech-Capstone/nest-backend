@@ -114,12 +114,16 @@ The backend also exposes the STS server-inventory contract:
 
 ```http
 GET /servers/{hostId}
+GET /sts/change-requests/{crId}
 ```
 
 STS should configure `SERVER_INVENTORY_URL=http://nest-backend:3000`.
 The endpoint resolves `{hostId}` by VM UUID or hostname, returns address data
 from `virtual_machines`, and enriches SSH-only metadata from
 `SERVER_INVENTORY_STATIC_JSON` or the `SERVER_INVENTORY_DEFAULT_*` env vars.
+STS should configure `CHANGE_REQUEST_URL=http://nest-backend:3000/sts`.
+The change-request endpoint returns the approval status and gateway host IDs
+derived from the CR's scoped VM IDs.
 
 Local development (`AUTH_MODE=dev`) does not receive ALB access tokens, so
 configure a Cognito service account instead:
