@@ -320,6 +320,113 @@ describe('SessionsService', () => {
     });
   });
 
+  describe('rejoinSession', () => {
+    const session = {
+      id: 'session-uuid',
+      hostId: 'host-1',
+      hostname: 'server01',
+      crId: 'cr-1',
+      createdBy: 'tech.dev',
+      status: 'disconnected',
+      gatewaySessionId: 'gateway-session-1',
+      update: jest.fn().mockResolvedValue({}),
+    };
+
+    beforeEach(() => {
+      session.update.mockClear();
+      mockSessionModel.findByPk.mockResolvedValue(session);
+    });
+
+    it('denies rejoin when the caller is not the original owner', async () => {
+      await expect(
+        service.rejoinSession('session-uuid', { ...mockUser, username: 'other.user' }, userGatewayAuth),
+      ).rejects.toThrow(ForbiddenException);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('denies ended sessions before calling the gateway', async () => {
+      mockSessionModel.findByPk.mockResolvedValueOnce({ ...session, status: 'ended' });
+
+      await expect(
+        service.rejoinSession('session-uuid', mockUser, userGatewayAuth),
+      ).rejects.toThrow(ForbiddenException);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('calls gateway with gatewaySessionId and stores fresh credentials', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(
+        makeFetchResponse({
+          websocketUrl: 'wss://gw/fresh',
+          sessionToken: 'fresh-token',
+          expiresAt: '2026-06-21T10:00:00.000Z',
+        }),
+      );
+
+      const result = await service.rejoinSession('session-uuid', mockUser, userGatewayAuth);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://gateway.test/sessions/gateway-session-1/rejoin',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          websocketUrl: 'wss://gw/fresh',
+          sessionToken: 'fresh-token',
+          scopedJwt: expect.any(String),
+        }),
+      );
+      expect(session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'active',
+          lastActivityAt: expect.any(Date),
+          sessionToken: 'fresh-token',
+          websocketUrl: 'wss://gw/fresh',
+          scopedJwt: expect.any(String),
+        }),
+      );
+    });
+  });
+
+  describe('observeSession', () => {
+    it('denies ended sessions before calling the gateway', async () => {
+      mockSessionModel.findByPk.mockResolvedValueOnce({
+        id: 'session-uuid',
+        status: 'ended',
+        gatewaySessionId: 'gateway-session-1',
+      });
+
+      await expect(
+        service.observeSession('session-uuid', mockUser, userGatewayAuth),
+      ).rejects.toThrow(ForbiddenException);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('calls gateway observe and returns read-only credentials', async () => {
+      mockSessionModel.findByPk.mockResolvedValueOnce({
+        id: 'session-uuid',
+        status: 'active',
+        gatewaySessionId: 'gateway-session-1',
+      });
+      (global.fetch as jest.Mock).mockResolvedValue(
+        makeFetchResponse({
+          websocketUrl: 'wss://gw/observe',
+          sessionToken: 'observer-token',
+        }),
+      );
+
+      const result = await service.observeSession('session-uuid', mockUser, userGatewayAuth);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://gateway.test/sessions/gateway-session-1/observe',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(result).toEqual({
+        websocketUrl: 'wss://gw/observe',
+        sessionToken: 'observer-token',
+      });
+    });
+  });
+
   describe('endSession', () => {
     it('marks session as ended with endedAt timestamp', async () => {
       const session = {

@@ -110,6 +110,21 @@ SSH gateway, the backend translates that UUID to `virtual_machines.hostname`.
 For the current static STS inventory, the VM hostname must therefore match the
 gateway host ID, for example `host-dev-1`.
 
+The webapp also stores a local DDM session record for every terminal launch.
+Frontend reconnect and observe calls use this local `access_sessions.id`:
+
+```http
+POST /ddm/sessions/{ddmSessionId}/rejoin
+POST /ddm/sessions/{ddmSessionId}/observe
+```
+
+The backend then calls the gateway with the stored `gatewaySessionId`. Owner
+rejoin is limited to the user that created the local session record. Successful
+rejoin moves a locally `disconnected` record back to `active` and stores the
+fresh gateway WebSocket URL and STS session token. Ended sessions cannot be
+rejoined or observed. Non-owner viewing must use observe, which receives a
+read-only gateway token.
+
 The backend also exposes the STS server-inventory contract:
 
 ```http

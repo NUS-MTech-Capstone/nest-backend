@@ -350,6 +350,13 @@ export class SessionsService {
   ): Promise<{ websocketUrl: string; sessionToken: string; scopedJwt: string }> {
     const session = await this.getSession(id);
 
+    if (session.createdBy !== user.username) {
+      throw new ForbiddenException('Only the original session owner can rejoin');
+    }
+    if (session.status === 'ended') {
+      throw new ForbiddenException('Ended sessions cannot be rejoined');
+    }
+
     if (!session.gatewaySessionId) {
       throw new ServiceUnavailableException(
         'Session has no gateway reference — it may predate rejoin support',
@@ -383,7 +390,13 @@ export class SessionsService {
       { expiresIn: '15m' },
     );
 
-    await session.update({ lastActivityAt: new Date() });
+    await session.update({
+      status: 'active' as const,
+      lastActivityAt: new Date(),
+      sessionToken: gateway.sessionToken,
+      websocketUrl: gateway.websocketUrl,
+      scopedJwt,
+    });
     this.logger.log(`Session ${id} rejoined by ${user.username}`);
 
     return { websocketUrl: gateway.websocketUrl, sessionToken: gateway.sessionToken, scopedJwt };
@@ -397,6 +410,10 @@ export class SessionsService {
     userAuth?: GatewayUserAuth,
   ): Promise<{ websocketUrl: string; sessionToken: string }> {
     const session = await this.getSession(id);
+
+    if (session.status === 'ended') {
+      throw new ForbiddenException('Ended sessions cannot be observed');
+    }
 
     if (!session.gatewaySessionId) {
       throw new ServiceUnavailableException(

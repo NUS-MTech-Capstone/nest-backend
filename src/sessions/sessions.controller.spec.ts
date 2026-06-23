@@ -11,6 +11,9 @@ describe('SessionsController', () => {
     listMySessions: jest.Mock;
     getSession: jest.Mock;
     getSessionToken: jest.Mock;
+    getRejoinCandidates: jest.Mock;
+    rejoinSession: jest.Mock;
+    observeSession: jest.Mock;
     endSession: jest.Mock;
     markDisconnected: jest.Mock;
   };
@@ -29,6 +32,9 @@ describe('SessionsController', () => {
       listMySessions: jest.fn(),
       getSession: jest.fn(),
       getSessionToken: jest.fn(),
+      getRejoinCandidates: jest.fn(),
+      rejoinSession: jest.fn(),
+      observeSession: jest.fn(),
       endSession: jest.fn(),
       markDisconnected: jest.fn(),
     };
@@ -81,6 +87,44 @@ describe('SessionsController', () => {
     const session = { id: 's1' };
     service.getSession.mockReturnValue(session);
     expect(controller.getOne('s1')).toBe(session);
+  });
+
+  it('rejoinSession forwards ALB auth headers to the service', () => {
+    const response = { websocketUrl: 'wss://gw', sessionToken: 'tok' };
+    service.rejoinSession.mockReturnValue(response);
+    const req = {
+      headers: {
+        'x-amzn-oidc-accesstoken': 'access-token',
+        'x-amzn-oidc-data': 'claims-token',
+        'x-amzn-oidc-identity': 'user-sub',
+      },
+    } as never;
+
+    expect(controller.rejoinSession('s1', user, req)).toBe(response);
+    expect(service.rejoinSession).toHaveBeenCalledWith('s1', user, {
+      accessToken: 'access-token',
+      oidcData: 'claims-token',
+      oidcIdentity: 'user-sub',
+    });
+  });
+
+  it('observeSession forwards ALB auth headers to the service', () => {
+    const response = { websocketUrl: 'wss://gw', sessionToken: 'tok' };
+    service.observeSession.mockReturnValue(response);
+    const req = {
+      headers: {
+        'x-amzn-oidc-accesstoken': 'access-token',
+        'x-amzn-oidc-data': 'claims-token',
+        'x-amzn-oidc-identity': 'user-sub',
+      },
+    } as never;
+
+    expect(controller.observeSession('s1', user, req)).toBe(response);
+    expect(service.observeSession).toHaveBeenCalledWith('s1', user, {
+      accessToken: 'access-token',
+      oidcData: 'claims-token',
+      oidcIdentity: 'user-sub',
+    });
   });
 
   it('endSession delegates to service with id and username', () => {
