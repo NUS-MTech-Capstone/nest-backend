@@ -10,5 +10,5 @@ jobs:
     uses: NUS-MTech-Capstone/github-actions-shared/.github/workflows/node-ci.yaml@main
     with:
       node-version: "22"
-      test-command: npm test -- --runInBand
+      test-command: npm test -- --runInBand --coverage --watchman=false
       build-command: npm run build
