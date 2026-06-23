@@ -113,32 +113,6 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
     allowNull: true,
   });
 
-  // ── access_sessions ───────────────────────────────────────────────────
-  await addIfMissing(context, 'access_sessions', 'crNumber', {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  });
-  await addIfMissing(context, 'access_sessions', 'gatewaySessionId', {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  });
-  await addIfMissing(context, 'access_sessions', 'sessionToken', {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  });
-  await addIfMissing(context, 'access_sessions', 'websocketUrl', {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  });
-  await addIfMissing(context, 'access_sessions', 'scopedJwt', {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  });
-  await addIfMissing(context, 'access_sessions', 'lastActivityAt', {
-    type: DataTypes.DATE,
-    allowNull: true,
-  });
-
   // ── implementerGroupMembers (may be absent) ───────────────────────────
   await createIfMissing(context, 'implementerGroupMembers', {
     id: { type: DataTypes.UUID, primaryKey: true, allowNull: false },

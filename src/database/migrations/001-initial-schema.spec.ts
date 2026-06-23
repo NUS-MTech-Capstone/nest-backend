@@ -31,7 +31,6 @@ describe('initial database migration', () => {
         'access_policies',
         'implementerGroupMembers',
         'implementerGroupMembershipRequests',
-        'access_sessions',
         'alert_events',
       ]);
 
@@ -47,9 +46,6 @@ describe('initial database migration', () => {
           'implementerGroupIds',
         ]),
       );
-      expect(tableColumns(context.createTable, 'access_sessions')).toEqual(
-        expect.arrayContaining(['gatewaySessionId', 'sessionToken', 'websocketUrl', 'scopedJwt']),
-      );
       // alert_events has no updatedAt
       expect(tableColumns(context.createTable, 'alert_events')).toEqual(
         expect.not.arrayContaining(['updatedAt']),
@@ -61,20 +57,6 @@ describe('initial database migration', () => {
         expect.objectContaining({
           name: 'membership_requests_pending_lookup',
           fields: ['username', 'implementerGroupId', 'status'],
-        }),
-      );
-      expect(context.addIndex).toHaveBeenCalledWith(
-        'access_sessions',
-        expect.objectContaining({
-          name: 'access_sessions_active_host',
-          fields: ['status', 'hostId'],
-        }),
-      );
-      expect(context.addIndex).toHaveBeenCalledWith(
-        'access_sessions',
-        expect.objectContaining({
-          name: 'access_sessions_created_by_started',
-          fields: ['createdBy', 'startedAt'],
         }),
       );
       expect(context.addIndex).toHaveBeenCalledWith(
@@ -118,12 +100,11 @@ describe('initial database migration', () => {
 
       await down({ context } as never);
 
-      // All nine tables must be dropped
+      // All Nest-owned tables must be dropped
       const droppedTables = context.dropTable.mock.calls.map(([name]) => name);
       expect(droppedTables).toEqual(
         expect.arrayContaining([
           'alert_events',
-          'access_sessions',
           'implementerGroupMembershipRequests',
           'implementerGroupMembers',
           'access_policies',

@@ -192,43 +192,6 @@ export const up: MigrationFn<QueryInterface> = async ({ context }) => {
     fields: ['username', 'implementerGroupId', 'status'],
   });
 
-  await context.createTable('access_sessions', {
-    id: {
-      type: DataTypes.UUID,
-      primaryKey: true,
-      allowNull: false,
-    },
-    hostId: { type: DataTypes.TEXT, allowNull: false },
-    hostname: { type: DataTypes.TEXT, allowNull: false },
-    ipAddress: { type: DataTypes.TEXT, allowNull: true },
-    sshPort: { type: DataTypes.INTEGER, allowNull: true },
-    crId: { type: DataTypes.UUID, allowNull: true },
-    crNumber: { type: DataTypes.TEXT, allowNull: true },
-    osUser: { type: DataTypes.TEXT, allowNull: false },
-    createdBy: { type: DataTypes.TEXT, allowNull: false },
-    status: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-      defaultValue: 'active',
-    },
-    gatewaySessionId: { type: DataTypes.TEXT, allowNull: true },
-    sessionToken: { type: DataTypes.TEXT, allowNull: true },
-    websocketUrl: { type: DataTypes.TEXT, allowNull: true },
-    scopedJwt: { type: DataTypes.TEXT, allowNull: true },
-    startedAt: { type: DataTypes.DATE, allowNull: false },
-    endedAt: { type: DataTypes.DATE, allowNull: true },
-    lastActivityAt: { type: DataTypes.DATE, allowNull: true },
-    ...timestamps,
-  });
-  await context.addIndex('access_sessions', {
-    name: 'access_sessions_active_host',
-    fields: ['status', 'hostId'],
-  });
-  await context.addIndex('access_sessions', {
-    name: 'access_sessions_created_by_started',
-    fields: ['createdBy', 'startedAt'],
-  });
-
   await context.createTable('alert_events', {
     id: {
       type: DataTypes.UUID,
@@ -272,7 +235,6 @@ export const down: MigrationFn<QueryInterface> = async ({ context }) => {
   // Drop tables in reverse FK-dependency order.
   // Use CASCADE so that any residual FK constraints don't block the drop.
   await context.dropTable('alert_events', { cascade: true });
-  await context.dropTable('access_sessions', { cascade: true });
   await context.dropTable('implementerGroupMembershipRequests', { cascade: true });
   await context.dropTable('implementerGroupMembers', { cascade: true });
   await context.dropTable('access_policies', { cascade: true });

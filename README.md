@@ -66,9 +66,8 @@ npm run migrate
 `premigrate` runs `npm run build` automatically so compiled migration files exist.
 
 Versioned migrations create all domain tables. The initial migration seeds the
-six default access policies and creates SSH session tracking and alert event
-history tables. Apply migrations before starting the app in any shared or
-production environment.
+six default access policies and creates alert event history tables. Apply
+migrations before starting the app in any shared or production environment.
 
 ## Container
 
@@ -80,50 +79,11 @@ The container entrypoint runs database migrations before starting the API.
 Set `SKIP_MIGRATIONS=true` to bypass migration on startup when a separate
 migration job already ran.
 
-## SSH gateway
+## STS inventory integration
 
-Terminal sessions proxy to an SSH gateway service. In production (`AUTH_MODE=alb`)
-the backend forwards the logged-in user's ALB OIDC headers
-(`x-amzn-oidc-data`, `x-amzn-oidc-accesstoken`, `x-amzn-oidc-identity`) to the
-gateway — **not** an `Authorization: Bearer` header. That matches how the ALB
-authenticates traffic on the public `/sessions` Ingress route.
-
-Configure the in-cluster gateway URL on the API deployment (Service
-`proxy-controlplane`, port `8080`, namespace `dendenmushi`):
-
-```bash
-SSH_GATEWAY_URL=http://proxy-controlplane:8080
-```
-
-If the API pod runs in another namespace, use the cluster DNS name:
-
-```bash
-SSH_GATEWAY_URL=http://proxy-controlplane.dendenmushi.svc.cluster.local:8080
-```
-
-Do not point `SSH_GATEWAY_URL` at the public ALB URL (`https://api.ddm.keiyam.me/sessions`).
-The backend calls `/sessions/start` itself and should reach the gateway pod directly.
-The Ingress Cognito auth on `/sessions` is for external clients only.
-
-The webapp stores its own UUID for each `virtual_machines.id`. When calling the
-SSH gateway, the backend translates that UUID to `virtual_machines.hostname`.
-For the current static STS inventory, the VM hostname must therefore match the
-gateway host ID, for example `host-dev-1`.
-
-The webapp also stores a local DDM session record for every terminal launch.
-Frontend reconnect and observe calls use this local `access_sessions.id`:
-
-```http
-POST /ddm/sessions/{ddmSessionId}/rejoin
-POST /ddm/sessions/{ddmSessionId}/observe
-```
-
-The backend then calls the gateway with the stored `gatewaySessionId`. Owner
-rejoin is limited to the user that created the local session record. Successful
-rejoin moves a locally `disconnected` record back to `active` and stores the
-fresh gateway WebSocket URL and STS session token. Ended sessions cannot be
-rejoined or observed. Non-owner viewing must use observe, which receives a
-read-only gateway token.
+Terminal session control is handled by Proxy Control Plane and Session Manager,
+not by this backend. The Angular client calls the public `/sessions` gateway
+routes directly after ALB authentication.
 
 The backend also exposes the STS server-inventory contract:
 
@@ -139,17 +99,6 @@ from `virtual_machines`, and enriches SSH-only metadata from
 STS should configure `CHANGE_REQUEST_URL=http://nest-backend:3000/sts`.
 The change-request endpoint returns the approval status and gateway host IDs
 derived from the CR's scoped VM IDs.
-
-Local development (`AUTH_MODE=dev`) does not receive ALB access tokens, so
-configure a Cognito service account instead:
-
-```bash
-SSH_GATEWAY_URL=http://localhost:8080
-SSH_GATEWAY_EMAIL=service-account@example.com
-SSH_GATEWAY_PASSWORD=...
-# Optional override; falls back to COGNITO_CLIENT_ID
-SSH_GATEWAY_COGNITO_CLIENT_ID=
-```
 
 ## CloudWatch monitoring
 

@@ -15,10 +15,8 @@ import { ImplementerGroupMember } from './implementer-group/implementer-group-me
 import { ImplementerGroupMembershipRequest } from './implementer-group/implementer-group-membership-request.entity';
 import { ImplementerGroupModule } from './implementer-group/implementer-group.module';
 import { HealthModule } from './health/health.module';
-import { SessionsModule } from './sessions/sessions.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { AlertEvent } from './monitoring/alert-event.entity';
-import { Session } from './sessions/session.entity';
 import { buildDatabaseConfig } from './config/database.config';
 import { ApiSpecController } from './api-spec/api-spec.controller';
 import { ApiSpecService } from './api-spec/api-spec.service';
@@ -32,7 +30,6 @@ const models = [
   ImplementerGroupMember,
   ImplementerGroupMembershipRequest,
   AlertEvent,
-  Session,
 ];
 
 @Module({
@@ -44,7 +41,6 @@ const models = [
     ChangeRequestModule,
     InventoryModule,
     ImplementerGroupModule,
-    SessionsModule,
     MonitoringModule,
   ],
   controllers: [AppController, ApiSpecController],
