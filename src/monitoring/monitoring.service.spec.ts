@@ -6,7 +6,7 @@ import { AlertEvent } from './alert-event.entity';
 jest.mock('@aws-sdk/client-cloudwatch');
 jest.mock('@aws-sdk/client-cloudwatch-logs');
 
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import { CloudWatchClient, DescribeAlarmsCommand, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
 import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 
 describe('MonitoringService', () => {
@@ -35,6 +35,9 @@ describe('MonitoringService', () => {
     (FilterLogEventsCommand as unknown as jest.Mock).mockImplementation((input: unknown) => ({
       input,
     }));
+    (GetMetricStatisticsCommand as unknown as jest.Mock).mockImplementation(
+      (input: unknown) => ({ input }),
+    );
 
     alertEventModel = {
       findAll: jest.fn().mockResolvedValue([]),
@@ -174,12 +177,103 @@ describe('MonitoringService', () => {
         dataPoints: [],
       });
     });
+
+    it('maps sorted metric datapoints and current value when configured', async () => {
+      process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MonitoringService,
+          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
+        ],
+      }).compile();
+      const configuredService = module.get(MonitoringService);
+
+      mockSendCw.mockResolvedValue({
+        Datapoints: [
+          { Timestamp: new Date('2026-06-18T01:00:00.000Z'), Sum: 5, Unit: 'Count' },
+          { Timestamp: new Date('2026-06-18T02:00:00.000Z'), Sum: 12, Unit: 'Count' },
+        ],
+      });
+
+      await expect(
+        configuredService.getMetrics('RequestCount', 'DenDenMushi', 24),
+      ).resolves.toEqual({
+        name: 'RequestCount',
+        namespace: 'DenDenMushi',
+        unit: 'Count',
+        current: 12,
+        dataPoints: [
+          {
+            timestamp: '2026-06-18T01:00:00.000Z',
+            value: 5,
+          },
+          {
+            timestamp: '2026-06-18T02:00:00.000Z',
+            value: 12,
+          },
+        ],
+      });
+    });
   });
 
   describe('getApplicationLogs / getSessionLogs', () => {
     it('returns empty array when log group is not configured', async () => {
       await expect(service.getApplicationLogs()).resolves.toEqual([]);
       await expect(service.getSessionLogs()).resolves.toEqual([]);
+    });
+
+    it('maps CloudWatch log events when application log group is configured', async () => {
+      process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
+      process.env.CLOUDWATCH_LOG_GROUP = '/ecs/api';
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MonitoringService,
+          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
+        ],
+      }).compile();
+      const configuredService = module.get(MonitoringService);
+
+      mockSendLogs.mockResolvedValue({
+        events: [
+          {
+            timestamp: 1_718_678_400_000,
+            message: 'ERROR something failed',
+            logStreamName: 'api/stream-1',
+          },
+        ],
+      });
+
+      await expect(configuredService.getApplicationLogs(50, 'ERROR')).resolves.toEqual([
+        {
+          timestamp: new Date(1_718_678_400_000).toISOString(),
+          message: 'ERROR something failed',
+          logStream: 'api/stream-1',
+        },
+      ]);
+    });
+
+    it('defaults session log filter pattern to "session"', async () => {
+      process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
+      process.env.CLOUDWATCH_SESSION_LOG_GROUP = '/ecs/sessions';
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MonitoringService,
+          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
+        ],
+      }).compile();
+      const configuredService = module.get(MonitoringService);
+
+      mockSendLogs.mockResolvedValue({ events: [] });
+
+      await configuredService.getSessionLogs(25);
+
+      expect(FilterLogEventsCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logGroupName: '/ecs/sessions',
+          limit: 25,
+          filterPattern: 'session',
+        }),
+      );
     });
   });
 

@@ -26,7 +26,7 @@ RUN addgroup -S -g 10001 appgroup && adduser -S -D -H -u 10001 -G appgroup appus
 # Copy compiled output from builder
 COPY --from=builder --chown=10001:10001 /app/dist ./dist
 COPY --chown=10001:10001 docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x docker-entrypoint.sh
+RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
 USER 10001:10001
 
