@@ -1,8 +1,5 @@
 import { createSign, generateKeyPairSync } from 'crypto';
-import {
-  BadRequestException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { TokenService } from './token.service';
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -68,6 +65,35 @@ describe('TokenService ALB authentication', () => {
     });
   });
 
+  it('normalizes Cognito groups and falls back to preferred username', async () => {
+    const service = new TokenService();
+    Object.assign(service, {
+      albVerifier: {
+        verify: jest.fn().mockResolvedValue({
+          sub: 'user-123',
+          preferred_username: 'alice.alias',
+          name: 'Alice Admin',
+        }),
+      },
+      cognitoVerifier: {
+        verify: jest.fn().mockResolvedValue({
+          sub: 'user-123',
+          'cognito:groups': ['admin', 'auditor', 'CustomRole'],
+        }),
+      },
+    });
+
+    await expect(
+      service.verifyAlbHeaders('claims-token', 'access-token'),
+    ).resolves.toEqual({
+      sub: 'user-123',
+      username: 'alice.alias',
+      email: undefined,
+      name: 'Alice Admin',
+      roles: ['Admin', 'Auditor', 'CustomRole'],
+    });
+  });
+
   it('rejects mismatched ALB and Cognito subjects', async () => {
     const service = new TokenService();
     Object.assign(service, {
@@ -83,6 +109,22 @@ describe('TokenService ALB authentication', () => {
       service.verifyAlbHeaders('claims-token', 'access-token'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it('rejects missing subject claims from either ALB or Cognito', async () => {
+    const service = new TokenService();
+    Object.assign(service, {
+      albVerifier: {
+        verify: jest.fn().mockResolvedValue({ sub: 'user-123' }),
+      },
+      cognitoVerifier: {
+        verify: jest.fn().mockResolvedValue({}),
+      },
+    });
+
+    await expect(
+      service.verifyAlbHeaders('claims-token', 'access-token'),
+    ).rejects.toThrow('ALB and Cognito subject mismatch');
+  });
 });
 
 describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
@@ -93,7 +135,8 @@ describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
       ...originalEnv,
       AUTH_MODE: 'alb',
       AWS_REGION: 'ap-southeast-1',
-      ALB_ARN: 'arn:aws:elasticloadbalancing:ap-southeast-1:123:loadbalancer/app/ddm/abc',
+      ALB_ARN:
+        'arn:aws:elasticloadbalancing:ap-southeast-1:123:loadbalancer/app/ddm/abc',
       COGNITO_USER_POOL_ID: 'ap-southeast-1_TEST',
       COGNITO_CLIENT_ID: 'client-id',
     };
@@ -107,9 +150,7 @@ describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
   function makeService() {
     const svc = new TokenService();
     // Stub the public-key fetch so tests never hit the real AWS endpoint.
-    jest
-      .spyOn(svc as any, 'getAlbPublicKey')
-      .mockResolvedValue(PUBLIC_KEY_PEM);
+    jest.spyOn(svc as any, 'getAlbPublicKey').mockResolvedValue(PUBLIC_KEY_PEM);
     return svc;
   }
 
@@ -140,7 +181,10 @@ describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
   });
 
   it('rejects a token with a tampered signature', async () => {
-    const token = makeAlbToken({ sub: 'x', exp: Math.floor(Date.now() / 1000) + 3600 }, PRIVATE_KEY_PEM);
+    const token = makeAlbToken(
+      { sub: 'x', exp: Math.floor(Date.now() / 1000) + 3600 },
+      PRIVATE_KEY_PEM,
+    );
     const parts = token.split('.');
     const tampered = `${parts[0]}.${parts[1]}.AAAA`;
 
@@ -148,6 +192,38 @@ describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
     await expect(
       (svc as any).verifyAlbOidcDataToken(tampered),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects a token signed by a different ALB', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = makeAlbToken(
+      {
+        sub: 'user-abc',
+        signer:
+          'arn:aws:elasticloadbalancing:ap-southeast-1:123:loadbalancer/app/other/abc',
+        exp: now + 3600,
+      },
+      PRIVATE_KEY_PEM,
+    );
+
+    const svc = makeService();
+    await expect((svc as any).verifyAlbOidcDataToken(token)).rejects.toThrow(
+      'ALB signer mismatch',
+    );
+  });
+
+  it('rejects a token without a key id', async () => {
+    const token = makeAlbToken(
+      { sub: 'user-abc', exp: Math.floor(Date.now() / 1000) + 3600 },
+      PRIVATE_KEY_PEM,
+      'test-kid',
+      { kid: undefined },
+    );
+
+    const svc = makeService();
+    await expect((svc as any).verifyAlbOidcDataToken(token)).rejects.toThrow(
+      'Missing ALB OIDC key id',
+    );
   });
 
   it('rejects an expired token', async () => {
@@ -158,14 +234,30 @@ describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
     );
 
     const svc = makeService();
-    await expect(
-      (svc as any).verifyAlbOidcDataToken(token),
-    ).rejects.toThrow('expired');
+    await expect((svc as any).verifyAlbOidcDataToken(token)).rejects.toThrow(
+      'expired',
+    );
+  });
+
+  it('rejects a token before its not-before time', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = makeAlbToken(
+      { sub: 'user-abc', nbf: now + 60, exp: now + 3600 },
+      PRIVATE_KEY_PEM,
+    );
+
+    const svc = makeService();
+    await expect((svc as any).verifyAlbOidcDataToken(token)).rejects.toThrow(
+      'not yet valid',
+    );
   });
 
   it('handles tokens with embedded whitespace (proxy header folding)', async () => {
     const now = Math.floor(Date.now() / 1000);
-    const token = makeAlbToken({ sub: 'user-abc', exp: now + 3600 }, PRIVATE_KEY_PEM);
+    const token = makeAlbToken(
+      { sub: 'user-abc', exp: now + 3600 },
+      PRIVATE_KEY_PEM,
+    );
     // Simulate a proxy folding whitespace inside the header segment only.
     const parts = token.split('.');
     const folded = `${parts[0].slice(0, 10)}\n${parts[0].slice(10)}.${parts[1]}.${parts[2]}`;
@@ -178,9 +270,9 @@ describe('TokenService verifyAlbOidcDataToken (crypto path)', () => {
   it('rejects when AWS_REGION or ALB_ARN are missing', async () => {
     delete process.env.AWS_REGION;
     const svc = new TokenService();
-    await expect(
-      (svc as any).verifyAlbOidcDataToken('a.b.c'),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect((svc as any).verifyAlbOidcDataToken('a.b.c')).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 });
 

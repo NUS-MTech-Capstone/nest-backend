@@ -103,8 +103,10 @@ describe('ServerInventoryController', () => {
   it('falls back to default SSH metadata env vars', async () => {
     delete process.env.SERVER_INVENTORY_STATIC_JSON;
     process.env.SERVER_INVENTORY_DEFAULT_USERNAME = 'ec2-user';
-    process.env.SERVER_INVENTORY_DEFAULT_CREDENTIAL_SECRET_ID = 'secret/default';
-    process.env.SERVER_INVENTORY_DEFAULT_HOST_PUBLIC_KEY = 'ssh-ed25519 AAAADEFAULT';
+    process.env.SERVER_INVENTORY_DEFAULT_CREDENTIAL_SECRET_ID =
+      'secret/default';
+    process.env.SERVER_INVENTORY_DEFAULT_HOST_PUBLIC_KEY =
+      'ssh-ed25519 AAAADEFAULT';
     inventoryService.findByIdOrHostname.mockResolvedValue(vm);
 
     await expect(controller.getServer('host-dev-1')).resolves.toEqual(
@@ -118,10 +120,21 @@ describe('ServerInventoryController', () => {
     );
   });
 
+  it('throws when static inventory JSON is invalid', async () => {
+    process.env.SERVER_INVENTORY_STATIC_JSON = '{not-json';
+    inventoryService.findByIdOrHostname.mockResolvedValue(vm);
+
+    await expect(controller.getServer('host-dev-1')).rejects.toThrow(
+      'SERVER_INVENTORY_STATIC_JSON is invalid JSON',
+    );
+  });
+
   it('throws NotFoundException when the VM does not exist', async () => {
     inventoryService.findByIdOrHostname.mockResolvedValue(null);
 
-    await expect(controller.getServer('missing')).rejects.toThrow(NotFoundException);
+    await expect(controller.getServer('missing')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('throws when required SSH metadata is missing', async () => {
