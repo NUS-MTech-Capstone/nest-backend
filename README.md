@@ -3,6 +3,11 @@
 NestJS APIs for change requests, inventory, access policy, memberships, and
 Cognito user administration.
 
+In the Phase 1 baseline, this backend owns authenticated web application data
+APIs, STS inventory/change-request lookups, Cognito administration, readiness,
+and CloudWatch monitoring views. It does not proxy terminal streams or issue
+session tokens.
+
 All application APIs use the `/ddm` prefix. Kubernetes probes are intentionally
 outside that prefix:
 
