@@ -7,6 +7,7 @@ import {
   API_VERSION_HEADER,
   SERVICE_NAME,
 } from './common/service.constants';
+import { JsonLogger, REQUEST_ID_HEADER } from './common/observability';
 import { validateRuntimeConfig } from './config/runtime.config';
 
 function configureCors(app: INestApplication): void {
@@ -26,7 +27,7 @@ function configureCors(app: INestApplication): void {
 
   app.enableCors({
     origin: origins.length === 1 ? origins[0] : origins,
-    allowedHeaders: ['Content-Type', 'Authorization', API_VERSION_HEADER],
+    allowedHeaders: ['Content-Type', 'Authorization', API_VERSION_HEADER, REQUEST_ID_HEADER],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 }
@@ -36,7 +37,7 @@ async function bootstrap() {
 
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
-    logger: ['log', 'error', 'warn', 'debug'],
+    logger: new JsonLogger(),
   });
 
   app.setGlobalPrefix(SERVICE_NAME, {

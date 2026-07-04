@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './decorators';
 import { TokenService } from './token.service';
+import { emitCount, errorKind, requestIdFrom } from '../common/observability';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -38,28 +39,57 @@ export class JwtAuthGuard implements CanActivate {
         | undefined;
 
       if (!oidcData || !accessToken) {
-        this.logger.error(
-          `Missing ALB headers — ` +
-            `x-amzn-oidc-data=${oidcData ? 'present' : 'MISSING'}, ` +
-            `x-amzn-oidc-accesstoken=${accessToken ? 'present' : 'MISSING'}`,
+        emitCount('AuthFailures', { Component: 'nest_auth', Reason: 'missing_alb_headers' });
+        this.logger.warn(
+          JSON.stringify({
+            event: 'AccessDenied',
+            requestId: requestIdFrom(request),
+            action: 'authenticate',
+            mode: 'alb',
+            status: 'denied',
+            reason: 'missing_alb_headers',
+            oidcData: oidcData ? 'present' : 'missing',
+            accessToken: accessToken ? 'present' : 'missing',
+          }),
         );
         throw new UnauthorizedException('Missing ALB authentication headers');
       }
 
-      request.user = await this.tokenService.verifyAlbHeaders(
-        oidcData,
-        accessToken,
-      );
+      try {
+        request.user = await this.tokenService.verifyAlbHeaders(
+          oidcData,
+          accessToken,
+        );
+      } catch (err) {
+        emitCount('AuthFailures', { Component: 'nest_auth', Reason: errorKind(err) });
+        this.logger.warn(
+          JSON.stringify({
+            event: 'AccessDenied',
+            requestId: requestIdFrom(request),
+            action: 'authenticate',
+            mode: 'alb',
+            status: 'denied',
+            errorKind: errorKind(err),
+          }),
+        );
+        throw err;
+      }
       return true;
     }
 
     const header: string = request.headers['authorization'] || '';
     const [scheme, token] = header.split(' ');
     if (scheme !== 'Bearer' || !token) {
+      emitCount('AuthFailures', { Component: 'nest_auth', Reason: 'missing_bearer' });
       throw new UnauthorizedException('Missing bearer token');
     }
 
-    request.user = await this.tokenService.verify(token);
+    try {
+      request.user = await this.tokenService.verify(token);
+    } catch (err) {
+      emitCount('AuthFailures', { Component: 'nest_auth', Reason: errorKind(err) });
+      throw err;
+    }
     return true;
   }
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -20,6 +20,7 @@ import { AlertEvent } from './monitoring/alert-event.entity';
 import { buildDatabaseConfig } from './config/database.config';
 import { ApiSpecController } from './api-spec/api-spec.controller';
 import { ApiSpecService } from './api-spec/api-spec.service';
+import { RequestIdMiddleware } from './common/observability';
 
 const models = [
   ChangeRequest,
@@ -44,6 +45,10 @@ const models = [
     MonitoringModule,
   ],
   controllers: [AppController, ApiSpecController],
-  providers: [AppService, ApiSpecService],
+  providers: [AppService, ApiSpecService, RequestIdMiddleware],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}
