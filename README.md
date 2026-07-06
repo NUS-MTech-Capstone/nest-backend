@@ -105,6 +105,27 @@ STS should configure `CHANGE_REQUEST_URL=http://nest-backend:3000/sts`.
 The change-request endpoint returns the approval status and gateway host IDs
 derived from the CR's scoped VM IDs.
 
+## Session audit facade
+
+Managers, auditors, security analysts, and admins can read retained SSH
+command/output audit through:
+
+```http
+GET /ddm/session-audit/sessions
+GET /ddm/session-audit/sessions/{sessionId}/records
+```
+
+The backend is only an authenticated facade. It does not proxy terminal
+traffic, capture command output, or store audit bodies in the webapp database.
+Configure it with:
+
+```bash
+SESSION_MANAGER_URL=http://session-manager:8081
+```
+
+The `session-audit.view` permission is granted to `Manager`, `Auditor`,
+`SecurityAnalyst`, and `Admin` by default.
+
 ## CloudWatch monitoring
 
 The monitoring API reads CloudWatch metrics, alarms, and log groups using the

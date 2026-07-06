@@ -30,6 +30,7 @@ export const PERMISSIONS = [
   'identity.policies.manage',
   'monitoring.view',
   'monitoring.sessions',
+  'session-audit.view',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -45,9 +46,9 @@ const EMPLOYEE_PERMISSIONS: Permission[] = [
 export const DEFAULT_POLICY_MATRIX: Record<Role, Permission[]> = {
   Employee: [...EMPLOYEE_PERMISSIONS],
   TechnicalStaff: [...EMPLOYEE_PERMISSIONS, 'access.launch', 'inventory.request', 'monitoring.view'],
-  Manager: [...EMPLOYEE_PERMISSIONS, 'change.approve', 'inventory.approve', 'identity.users.view'],
-  SecurityAnalyst: [...EMPLOYEE_PERMISSIONS, 'access.stop', 'access.watch', 'identity.users.view', 'monitoring.view', 'monitoring.sessions'],
-  Auditor: ['access.view', 'change.view', 'inventory.view', 'identity.users.view', 'monitoring.sessions'],
+  Manager: [...EMPLOYEE_PERMISSIONS, 'change.approve', 'inventory.approve', 'identity.users.view', 'session-audit.view'],
+  SecurityAnalyst: [...EMPLOYEE_PERMISSIONS, 'access.stop', 'access.watch', 'identity.users.view', 'monitoring.view', 'monitoring.sessions', 'session-audit.view'],
+  Auditor: ['access.view', 'change.view', 'inventory.view', 'identity.users.view', 'monitoring.sessions', 'session-audit.view'],
   Admin: [...PERMISSIONS],
 };
 

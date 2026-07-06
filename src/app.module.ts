@@ -17,6 +17,7 @@ import { ImplementerGroupModule } from './implementer-group/implementer-group.mo
 import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { AlertEvent } from './monitoring/alert-event.entity';
+import { SessionAuditModule } from './session-audit/session-audit.module';
 import { buildDatabaseConfig } from './config/database.config';
 import { ApiSpecController } from './api-spec/api-spec.controller';
 import { ApiSpecService } from './api-spec/api-spec.service';
@@ -43,6 +44,7 @@ const models = [
     InventoryModule,
     ImplementerGroupModule,
     MonitoringModule,
+    SessionAuditModule,
   ],
   controllers: [AppController, ApiSpecController],
   providers: [AppService, ApiSpecService, RequestIdMiddleware],

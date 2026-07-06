@@ -718,6 +718,73 @@ paths:
       responses:
         "200":
           description: Webhook accepted.
+  /ddm/session-audit/sessions:
+    get:
+      summary: List sessions with retained command/output audit
+      parameters:
+        - name: sessionId
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: hostId
+          in: query
+          schema:
+            type: string
+        - name: crId
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: string
+            default: "50"
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audited sessions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAuditSessionsResponse"
+  /ddm/session-audit/sessions/{id}/records:
+    get:
+      summary: List retained command/output audit records for a session
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: limit
+          in: query
+          schema:
+            type: string
+            default: "500"
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session audit records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSessionAuditRecordsResponse"
 components:
   securitySchemes:
     albSession:
@@ -803,6 +870,84 @@ components:
           type: array
           items:
             type: string
+    AuditSessionSummary:
+      type: object
+      required: [sessionId, userId, hostId, crId, connectionType, status, createdAt, lastAuditAt, recordCount, truncated]
+      properties:
+        sessionId:
+          type: string
+        userId:
+          type: string
+        hostId:
+          type: string
+        crId:
+          type: string
+        connectionType:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastAuditAt:
+          type: string
+          format: date-time
+        recordCount:
+          type: integer
+        truncated:
+          type: boolean
+    ListAuditSessionsResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditSessionSummary"
+        nextCursor:
+          type: string
+    SessionAuditRecord:
+      type: object
+      required: [sessionId, userId, hostId, crId, recordType, sequence, createdAt, truncated, byteCount]
+      properties:
+        sessionId:
+          type: string
+        userId:
+          type: string
+        hostId:
+          type: string
+        crId:
+          type: string
+        recordType:
+          type: string
+          enum: [command, output, control, session_event]
+        sequence:
+          type: integer
+          format: int64
+        commandId:
+          type: string
+        commandText:
+          type: string
+        outputDataBase64:
+          type: string
+          contentEncoding: base64
+        createdAt:
+          type: string
+          format: date-time
+        truncated:
+          type: boolean
+        byteCount:
+          type: integer
+    ListSessionAuditRecordsResponse:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionAuditRecord"
+        nextCursor:
+          type: string
     ChangeRequest:
       type: object
       additionalProperties: true
