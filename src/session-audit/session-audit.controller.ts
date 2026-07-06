@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { RequirePermission } from '../auth/decorators';
 import { SessionAuditService } from './session-audit.service';
 import type {
+  ListAuditRecordsQuery,
   ListAuditSessionsQuery,
   ListSessionAuditRecordsQuery,
 } from './session-audit.types';
@@ -14,6 +15,11 @@ export class SessionAuditController {
   @Get('sessions')
   listSessions(@Query() query: ListAuditSessionsQuery) {
     return this.sessionAuditService.listSessions(query);
+  }
+
+  @Get('records')
+  listRecordsGlobal(@Query() query: ListAuditRecordsQuery) {
+    return this.sessionAuditService.listRecordsGlobal(query);
   }
 
   @Get('sessions/:sessionId/records')

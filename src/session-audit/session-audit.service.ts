@@ -1,5 +1,6 @@
 import { BadGatewayException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type {
+  ListAuditRecordsQuery,
   ListAuditSessionsQuery,
   ListAuditSessionsResponse,
   ListSessionAuditRecordsQuery,
@@ -12,6 +13,10 @@ export class SessionAuditService {
 
   async listSessions(query: ListAuditSessionsQuery): Promise<ListAuditSessionsResponse> {
     return this.get<ListAuditSessionsResponse>('/sessions/audit', query);
+  }
+
+  async listRecordsGlobal(query: ListAuditRecordsQuery): Promise<ListSessionAuditRecordsResponse> {
+    return this.get<ListSessionAuditRecordsResponse>('/sessions/audit/records', query);
   }
 
   async listRecords(

@@ -112,6 +112,7 @@ command/output audit through:
 
 ```http
 GET /ddm/session-audit/sessions
+GET /ddm/session-audit/records
 GET /ddm/session-audit/sessions/{sessionId}/records
 ```
 

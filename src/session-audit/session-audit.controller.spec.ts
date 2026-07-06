@@ -6,12 +6,14 @@ describe('SessionAuditController', () => {
   let controller: SessionAuditController;
   let service: {
     listSessions: jest.Mock;
+    listRecordsGlobal: jest.Mock;
     listRecords: jest.Mock;
   };
 
   beforeEach(async () => {
     service = {
       listSessions: jest.fn().mockResolvedValue({ sessions: [] }),
+      listRecordsGlobal: jest.fn().mockResolvedValue({ records: [] }),
       listRecords: jest.fn().mockResolvedValue({ records: [] }),
     };
 
@@ -33,5 +35,11 @@ describe('SessionAuditController', () => {
     const query = { cursor: '10' };
     await controller.listRecords('sess-1', query);
     expect(service.listRecords).toHaveBeenCalledWith('sess-1', query);
+  });
+
+  it('delegates global record filters', async () => {
+    const query = { hostId: 'host-1', recordType: 'command' as const, limit: '25' };
+    await controller.listRecordsGlobal(query);
+    expect(service.listRecordsGlobal).toHaveBeenCalledWith(query);
   });
 });

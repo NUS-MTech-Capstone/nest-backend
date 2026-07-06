@@ -55,6 +55,28 @@ describe('SessionAuditService', () => {
     );
   });
 
+  it('lists global audit records through Audit Service with filters', async () => {
+    process.env.SESSION_AUDIT_URL = 'http://audit-service:8085';
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ records: [{ sequence: 1 }] }),
+    });
+    global.fetch = fetchMock;
+
+    const service = new SessionAuditService();
+    await expect(service.listRecordsGlobal({
+      hostId: 'host-1',
+      recordType: 'command',
+      from: '2026-07-06T01:00:00Z',
+      limit: '25',
+    })).resolves.toEqual({ records: [{ sequence: 1 }] });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://audit-service:8085/sessions/audit/records?hostId=host-1&recordType=command&from=2026-07-06T01%3A00%3A00Z&limit=25',
+      { method: 'GET' },
+    );
+  });
+
   it('fails when SESSION_AUDIT_URL is missing', async () => {
     delete process.env.SESSION_AUDIT_URL;
     const service = new SessionAuditService();

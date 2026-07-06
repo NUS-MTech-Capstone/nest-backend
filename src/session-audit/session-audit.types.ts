@@ -36,6 +36,18 @@ export interface ListSessionAuditRecordsResponse {
   nextCursor?: string;
 }
 
+export interface ListAuditRecordsQuery {
+  sessionId?: string;
+  userId?: string;
+  hostId?: string;
+  crId?: string;
+  recordType?: 'command' | 'output' | 'control' | 'session_event';
+  from?: string;
+  to?: string;
+  limit?: string;
+  cursor?: string;
+}
+
 export interface ListAuditSessionsQuery {
   sessionId?: string;
   userId?: string;
