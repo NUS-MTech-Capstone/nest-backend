@@ -120,7 +120,7 @@ traffic, capture command output, or store audit bodies in the webapp database.
 Configure it with:
 
 ```bash
-SESSION_MANAGER_URL=http://session-manager:8081
+SESSION_AUDIT_URL=http://audit-service:8085
 ```
 
 The `session-audit.view` permission is granted to `Manager`, `Auditor`,

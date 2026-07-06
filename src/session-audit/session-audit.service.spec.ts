@@ -13,8 +13,8 @@ describe('SessionAuditService', () => {
     process.env = originalEnv;
   });
 
-  it('lists audit sessions through Session Manager with filters', async () => {
-    process.env.SESSION_MANAGER_URL = 'http://session-manager:8081/';
+  it('lists audit sessions through Audit Service with filters', async () => {
+    process.env.SESSION_AUDIT_URL = 'http://audit-service:8085/';
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({ sessions: [{ sessionId: 'sess-1' }] }),
@@ -31,13 +31,13 @@ describe('SessionAuditService', () => {
     })).resolves.toEqual({ sessions: [{ sessionId: 'sess-1' }] });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://session-manager:8081/sessions/audit?userId=user-1&hostId=host-1&crId=cr-1&limit=25&cursor=50',
+      'http://audit-service:8085/sessions/audit?userId=user-1&hostId=host-1&crId=cr-1&limit=25&cursor=50',
       { method: 'GET' },
     );
   });
 
   it('lists audit records for a session', async () => {
-    process.env.SESSION_MANAGER_URL = 'http://session-manager:8081';
+    process.env.SESSION_AUDIT_URL = 'http://audit-service:8085';
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({ records: [{ sequence: 1 }] }),
@@ -50,20 +50,20 @@ describe('SessionAuditService', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://session-manager:8081/sessions/sess-1/audit/records?cursor=10',
+      'http://audit-service:8085/sessions/sess-1/audit/records?cursor=10',
       { method: 'GET' },
     );
   });
 
-  it('fails when SESSION_MANAGER_URL is missing', async () => {
-    delete process.env.SESSION_MANAGER_URL;
+  it('fails when SESSION_AUDIT_URL is missing', async () => {
+    delete process.env.SESSION_AUDIT_URL;
     const service = new SessionAuditService();
 
     await expect(service.listSessions({})).rejects.toThrow(ServiceUnavailableException);
   });
 
-  it('maps Session Manager errors to bad gateway', async () => {
-    process.env.SESSION_MANAGER_URL = 'http://session-manager:8081';
+  it('maps Audit Service errors to bad gateway', async () => {
+    process.env.SESSION_AUDIT_URL = 'http://audit-service:8085';
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500 });
 
     const service = new SessionAuditService();

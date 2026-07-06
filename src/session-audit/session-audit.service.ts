@@ -8,7 +8,7 @@ import type {
 
 @Injectable()
 export class SessionAuditService {
-  private readonly sessionManagerUrl = (process.env.SESSION_MANAGER_URL ?? '').replace(/\/+$/, '');
+  private readonly sessionAuditUrl = (process.env.SESSION_AUDIT_URL ?? '').replace(/\/+$/, '');
 
   async listSessions(query: ListAuditSessionsQuery): Promise<ListAuditSessionsResponse> {
     return this.get<ListAuditSessionsResponse>('/sessions/audit', query);
@@ -25,8 +25,8 @@ export class SessionAuditService {
   }
 
   private async get<T>(path: string, query: object): Promise<T> {
-    if (!this.sessionManagerUrl) {
-      throw new ServiceUnavailableException('SESSION_MANAGER_URL is not configured');
+    if (!this.sessionAuditUrl) {
+      throw new ServiceUnavailableException('SESSION_AUDIT_URL is not configured');
     }
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {
@@ -34,15 +34,15 @@ export class SessionAuditService {
         params.set(key, String(value));
       }
     }
-    const url = `${this.sessionManagerUrl}${path}${params.size ? `?${params.toString()}` : ''}`;
+    const url = `${this.sessionAuditUrl}${path}${params.size ? `?${params.toString()}` : ''}`;
     let response: Response;
     try {
       response = await fetch(url, { method: 'GET' });
     } catch {
-      throw new BadGatewayException('Session Manager is unavailable');
+      throw new BadGatewayException('Audit Service is unavailable');
     }
     if (!response.ok) {
-      throw new BadGatewayException(`Session Manager returned ${response.status}`);
+      throw new BadGatewayException(`Audit Service returned ${response.status}`);
     }
     return response.json() as Promise<T>;
   }
