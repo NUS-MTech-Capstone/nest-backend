@@ -785,6 +785,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListSessionAuditRecordsResponse"
+  /ddm/audit/events:
+    get:
+      summary: List sanitized platform lifecycle metadata events
+      parameters:
+        - name: eventType
+          in: query
+          schema:
+            type: string
+        - name: source
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          schema:
+            type: string
+        - name: hostId
+          in: query
+          schema:
+            type: string
+        - name: crId
+          in: query
+          schema:
+            type: string
+        - name: incidentId
+          in: query
+          schema:
+            type: string
+        - name: runId
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: string
+            default: "100"
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sanitized lifecycle events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMetadataEventsResponse"
 components:
   securitySchemes:
     albSession:
@@ -946,6 +1008,59 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SessionAuditRecord"
+        nextCursor:
+          type: string
+    MetadataEvent:
+      type: object
+      required: [schemaVersion, eventId, eventType, source, occurredAt]
+      properties:
+        schemaVersion:
+          type: string
+        eventId:
+          type: string
+        eventType:
+          type: string
+        source:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        userId:
+          type: string
+        sessionId:
+          type: string
+        hostId:
+          type: string
+        crId:
+          type: string
+        podId:
+          type: string
+        instanceId:
+          type: string
+        incidentId:
+          type: string
+        runId:
+          type: string
+        action:
+          type: string
+        mode:
+          type: string
+        outcome:
+          type: string
+        reasonCode:
+          type: string
+        planHash:
+          type: string
+    ListMetadataEventsResponse:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetadataEvent"
         nextCursor:
           type: string
     ChangeRequest:

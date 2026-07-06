@@ -63,3 +63,45 @@ export interface ListSessionAuditRecordsQuery {
   limit?: string;
   cursor?: string;
 }
+
+export interface MetadataEvent {
+  schemaVersion: string;
+  eventId: string;
+  eventType: string;
+  source: string;
+  occurredAt: string;
+  requestId?: string;
+  userId?: string;
+  sessionId?: string;
+  hostId?: string;
+  crId?: string;
+  podId?: string;
+  instanceId?: string;
+  incidentId?: string;
+  runId?: string;
+  action?: string;
+  mode?: string;
+  outcome?: string;
+  reasonCode?: string;
+  planHash?: string;
+}
+
+export interface ListMetadataEventsResponse {
+  events: MetadataEvent[];
+  nextCursor?: string;
+}
+
+export interface ListMetadataEventsQuery {
+  eventType?: string;
+  source?: string;
+  userId?: string;
+  sessionId?: string;
+  hostId?: string;
+  crId?: string;
+  incidentId?: string;
+  runId?: string;
+  from?: string;
+  to?: string;
+  limit?: string;
+  cursor?: string;
+}

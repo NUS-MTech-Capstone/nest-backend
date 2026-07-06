@@ -114,15 +114,22 @@ command/output audit through:
 GET /ddm/session-audit/sessions
 GET /ddm/session-audit/records
 GET /ddm/session-audit/sessions/{sessionId}/records
+GET /ddm/audit/events
 ```
 
 The backend is only an authenticated facade. It does not proxy terminal
-traffic, capture command output, or store audit bodies in the webapp database.
+traffic, capture command output, store audit bodies, or persist lifecycle events
+in the webapp database.
 Configure it with:
 
 ```bash
 SESSION_AUDIT_URL=http://audit-service:8085
 ```
+
+`GET /ddm/audit/events` forwards metadata timeline filters to Audit Service
+`GET /events`, including `eventType`, `source`, `userId`, `sessionId`, `hostId`,
+`crId`, `incidentId`, `runId`, `from`, `to`, `limit`, and `cursor`. The response
+contains sanitized metadata only.
 
 The `session-audit.view` permission is granted to `Manager`, `Auditor`,
 `SecurityAnalyst`, and `Admin` by default.

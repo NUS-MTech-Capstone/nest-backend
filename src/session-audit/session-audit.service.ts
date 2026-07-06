@@ -3,6 +3,8 @@ import type {
   ListAuditRecordsQuery,
   ListAuditSessionsQuery,
   ListAuditSessionsResponse,
+  ListMetadataEventsQuery,
+  ListMetadataEventsResponse,
   ListSessionAuditRecordsQuery,
   ListSessionAuditRecordsResponse,
 } from './session-audit.types';
@@ -27,6 +29,10 @@ export class SessionAuditService {
       `/sessions/${encodeURIComponent(sessionId)}/audit/records`,
       query,
     );
+  }
+
+  async listMetadataEvents(query: ListMetadataEventsQuery): Promise<ListMetadataEventsResponse> {
+    return this.get<ListMetadataEventsResponse>('/events', query);
   }
 
   private async get<T>(path: string, query: object): Promise<T> {

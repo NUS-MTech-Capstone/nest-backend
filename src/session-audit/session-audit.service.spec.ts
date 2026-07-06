@@ -77,6 +77,30 @@ describe('SessionAuditService', () => {
     );
   });
 
+  it('lists metadata events through Audit Service with filters', async () => {
+    process.env.SESSION_AUDIT_URL = 'http://audit-service:8085';
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ events: [{ eventId: 'evt-1' }], nextCursor: null }),
+    });
+    global.fetch = fetchMock;
+
+    const service = new SessionAuditService();
+    await expect(service.listMetadataEvents({
+      eventType: 'SessionCreated',
+      source: 'session-manager',
+      sessionId: 'sess-1',
+      from: '2026-07-06T01:00:00Z',
+      limit: '25',
+      cursor: '50',
+    })).resolves.toEqual({ events: [{ eventId: 'evt-1' }], nextCursor: null });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://audit-service:8085/events?eventType=SessionCreated&source=session-manager&sessionId=sess-1&from=2026-07-06T01%3A00%3A00Z&limit=25&cursor=50',
+      { method: 'GET' },
+    );
+  });
+
   it('fails when SESSION_AUDIT_URL is missing', async () => {
     delete process.env.SESSION_AUDIT_URL;
     const service = new SessionAuditService();
