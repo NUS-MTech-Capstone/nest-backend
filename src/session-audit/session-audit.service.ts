@@ -48,7 +48,10 @@ export class SessionAuditService {
     const url = `${this.sessionAuditUrl}${path}${params.size ? `?${params.toString()}` : ''}`;
     let response: Response;
     try {
-      response = await fetch(url, { method: 'GET' });
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { 'x-api-version': '1' },
+      });
     } catch {
       throw new BadGatewayException('Audit Service is unavailable');
     }

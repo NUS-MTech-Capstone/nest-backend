@@ -32,7 +32,7 @@ describe('SessionAuditService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://audit-service:8085/sessions/audit?userId=user-1&hostId=host-1&crId=cr-1&limit=25&cursor=50',
-      { method: 'GET' },
+      { method: 'GET', headers: { 'x-api-version': '1' } },
     );
   });
 
@@ -51,7 +51,7 @@ describe('SessionAuditService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://audit-service:8085/sessions/sess-1/audit/records?cursor=10',
-      { method: 'GET' },
+      { method: 'GET', headers: { 'x-api-version': '1' } },
     );
   });
 
@@ -73,7 +73,7 @@ describe('SessionAuditService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://audit-service:8085/sessions/audit/records?hostId=host-1&recordType=command&from=2026-07-06T01%3A00%3A00Z&limit=25',
-      { method: 'GET' },
+      { method: 'GET', headers: { 'x-api-version': '1' } },
     );
   });
 
@@ -97,7 +97,7 @@ describe('SessionAuditService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://audit-service:8085/events?eventType=SessionCreated&source=session-manager&sessionId=sess-1&from=2026-07-06T01%3A00%3A00Z&limit=25&cursor=50',
-      { method: 'GET' },
+      { method: 'GET', headers: { 'x-api-version': '1' } },
     );
   });
 
