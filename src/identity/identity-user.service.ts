@@ -16,6 +16,7 @@ import {
 import { DEV_USERS, ROLES } from '../auth/auth.constants';
 
 export interface ManagedUser {
+  sub?: string;
   username: string;
   email?: string;
   name?: string;
@@ -39,6 +40,7 @@ export class IdentityUserService {
   private client?: CognitoIdentityProviderClient;
 
   private devUsers: ManagedUser[] = DEV_USERS.map((user) => ({
+    sub: `dev-${user.username}`,
     username: user.username,
     email: user.email,
     name: user.name,
@@ -96,6 +98,7 @@ export class IdentityUserService {
         (user.Attributes ?? []).map((attr) => [attr.Name, attr.Value]),
       );
       users.push({
+        sub: attributes['sub'],
         username,
         email: attributes['email'],
         name: attributes['name'],
@@ -117,6 +120,7 @@ export class IdentityUserService {
         );
       }
       const user: ManagedUser = {
+        sub: `dev-${request.username}`,
         username: request.username,
         email: request.email,
         name: request.name,

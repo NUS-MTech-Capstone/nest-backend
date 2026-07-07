@@ -59,6 +59,7 @@ describe('IdentityUserService', () => {
 
       expect(users.length).toBeGreaterThan(0);
       expect(users.some((user) => user.username === 'admin.dev')).toBe(true);
+      expect(users.find((user) => user.username === 'admin.dev')?.sub).toBe('dev-admin.dev');
       expect(users.every((user) => user.enabled)).toBe(true);
     });
 
@@ -73,6 +74,7 @@ describe('IdentityUserService', () => {
       expect(created).toEqual(
         expect.objectContaining({
           username: 'new.dev',
+          sub: 'dev-new.dev',
           email: 'new@example.com',
           roles: ['Employee'],
           enabled: true,
@@ -158,6 +160,7 @@ describe('IdentityUserService', () => {
               Attributes: [
                 { Name: 'email', Value: 'alice@example.com' },
                 { Name: 'name', Value: 'Alice' },
+                { Name: 'sub', Value: 'user-123' },
               ],
             },
           ],
@@ -169,6 +172,7 @@ describe('IdentityUserService', () => {
       await expect(service.listUsers()).resolves.toEqual([
         {
           username: 'alice',
+          sub: 'user-123',
           email: 'alice@example.com',
           name: 'Alice',
           enabled: true,
