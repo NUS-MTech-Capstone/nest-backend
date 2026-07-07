@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: DenDenMushi Nest Backend API
   version: 0.1.0
-  description: Web application API for auth, identity administration, change requests, inventory, implementer groups, sessions, and monitoring.
+  description: Web application API for auth, identity administration, change requests, inventory, implementer groups, sessions, and monitoring. Business endpoints require the `x-api-version: 1` header; health, readiness, OpenAPI, root, ALB login/logout redirects, and the SNS alert webhook are exempt.
 servers:
   - url: http://localhost:3000
     description: Local Nest backend; application APIs are under /ddm.

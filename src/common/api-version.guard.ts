@@ -1,30 +1,16 @@
-import {
-  BadRequestException,
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '../auth/decorators';
+import { BadRequestException, CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import {
   API_VERSION_HEADER,
-  SERVICE_NAME,
   SUPPORTED_API_VERSION,
 } from './service.constants';
 
 @Injectable()
 export class ApiVersionGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
-
   canActivate(context: ExecutionContext): boolean {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
     const request = context.switchToHttp().getRequest();
     const path: string = request.path ?? '';
 
-    if (isPublic || path === '/healthz' || path === '/readyz') {
+    if (isApiVersionExempt(path)) {
       return true;
     }
 
@@ -37,4 +23,16 @@ export class ApiVersionGuard implements CanActivate {
 
     return true;
   }
+}
+
+function isApiVersionExempt(path: string): boolean {
+  return [
+    '/',
+    '/healthz',
+    '/readyz',
+    '/openapi.yaml',
+    '/ddm/auth/login',
+    '/ddm/auth/logout',
+    '/ddm/monitoring/alerts/webhook',
+  ].includes(path);
 }

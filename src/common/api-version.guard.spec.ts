@@ -1,16 +1,12 @@
 import { BadRequestException, ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { ApiVersionGuard } from './api-version.guard';
 import {
   API_VERSION_HEADER,
-  SERVICE_NAME,
   SUPPORTED_API_VERSION,
 } from './service.constants';
-import { IS_PUBLIC_KEY } from '../auth/decorators';
 
 describe('ApiVersionGuard', () => {
   let guard: ApiVersionGuard;
-  let reflector: { getAllAndOverride: jest.Mock };
 
   const createContext = (
     path: string,
@@ -28,18 +24,7 @@ describe('ApiVersionGuard', () => {
   };
 
   beforeEach(() => {
-    reflector = { getAllAndOverride: jest.fn().mockReturnValue(false) };
-    guard = new ApiVersionGuard(reflector as unknown as Reflector);
-  });
-
-  it('allows public routes without version header', () => {
-    reflector.getAllAndOverride.mockReturnValue(true);
-
-    expect(guard.canActivate(createContext('/ddm/auth/config'))).toBe(true);
-    expect(reflector.getAllAndOverride).toHaveBeenCalledWith(
-      IS_PUBLIC_KEY,
-      expect.any(Array),
-    );
+    guard = new ApiVersionGuard();
   });
 
   it('allows probe paths without version header', () => {
@@ -47,14 +32,12 @@ describe('ApiVersionGuard', () => {
     expect(guard.canActivate(createContext('/readyz'))).toBe(true);
   });
 
-  it('allows @Public server inventory routes without version header', () => {
-    reflector.getAllAndOverride.mockReturnValue(true);
-
-    expect(guard.canActivate(createContext('/servers/host-dev-1'))).toBe(true);
-    expect(reflector.getAllAndOverride).toHaveBeenCalledWith(
-      IS_PUBLIC_KEY,
-      expect.any(Array),
-    );
+  it('allows explicit browser and spec exemptions without version header', () => {
+    expect(guard.canActivate(createContext('/'))).toBe(true);
+    expect(guard.canActivate(createContext('/openapi.yaml'))).toBe(true);
+    expect(guard.canActivate(createContext('/ddm/auth/login'))).toBe(true);
+    expect(guard.canActivate(createContext('/ddm/auth/logout'))).toBe(true);
+    expect(guard.canActivate(createContext('/ddm/monitoring/alerts/webhook'))).toBe(true);
   });
 
   it('allows requests with supported version header', () => {
@@ -69,6 +52,12 @@ describe('ApiVersionGuard', () => {
 
   it('rejects requests with missing or unsupported version header', () => {
     expect(() => guard.canActivate(createContext('/ddm/change-requests'))).toThrow(
+      BadRequestException,
+    );
+    expect(() => guard.canActivate(createContext('/ddm/auth/config'))).toThrow(
+      BadRequestException,
+    );
+    expect(() => guard.canActivate(createContext('/servers/host-dev-1'))).toThrow(
       BadRequestException,
     );
     expect(() =>
