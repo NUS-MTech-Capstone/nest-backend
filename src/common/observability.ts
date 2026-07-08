@@ -54,6 +54,7 @@ export class RequestIdMiddleware implements NestMiddleware {
     res.setHeader(REQUEST_ID_HEADER, requestId);
     const started = Date.now();
     res.on('finish', () => {
+      if (shouldSkipRequestLog(req.method, req.path, res.statusCode)) return;
       json('info', 'http_request', 'HttpRequest', {
         requestId,
         method: req.method,
@@ -64,6 +65,18 @@ export class RequestIdMiddleware implements NestMiddleware {
     });
     next();
   }
+}
+
+export function shouldSkipRequestLog(
+  method: string,
+  path: string,
+  status: number,
+): boolean {
+  return (
+    status < 400 &&
+    method === 'GET' &&
+    (path === '/healthz' || path === '/readyz')
+  );
 }
 
 export function requestIdFrom(req: Request): string {

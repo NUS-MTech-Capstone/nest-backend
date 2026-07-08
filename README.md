@@ -20,6 +20,8 @@ Business endpoints require `x-api-version: 1`. `GET /healthz`, `GET /readyz`,
 `GET /openapi.yaml`, `/`, `/ddm/auth/login`, `/ddm/auth/logout`, and
 `/ddm/monitoring/alerts/webhook` are exempt so probes, browser redirects, and
 SNS delivery do not need custom headers.
+Successful probe request logs are suppressed; failed probe responses still emit
+request logs.
 
 `/healthz` only reports that the process is running. `/readyz` executes
 `SELECT 1` and returns `503` while PostgreSQL is unavailable.
