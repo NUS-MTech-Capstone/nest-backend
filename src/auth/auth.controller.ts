@@ -13,6 +13,8 @@ import { CurrentUser, Public } from './decorators';
 import { TokenService } from './token.service';
 import { PolicyService } from '../identity/policy.service';
 
+const ALB_AUTH_COOKIE_SHARD_COUNT = 4;
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -58,10 +60,6 @@ export class AuthController {
       );
     }
 
-    const cookieName =
-      process.env.ALB_AUTH_COOKIE_NAME || 'AWSELBAuthSessionCookie';
-    res.clearCookie(cookieName, { path: '/' });
-
     const clientId = process.env.COGNITO_CLIENT_ID;
     const domain = process.env.COGNITO_DOMAIN;
     const logoutUri = encodeURIComponent(
@@ -73,6 +71,30 @@ export class AuthController {
         'COGNITO_CLIENT_ID and COGNITO_DOMAIN must be set for ALB logout',
       );
     }
+
+    const cookieName =
+      process.env.ALB_AUTH_COOKIE_NAME || 'AWSELBAuthSessionCookie';
+    const cookieNames = [
+      cookieName,
+      ...Array.from(
+        { length: ALB_AUTH_COOKIE_SHARD_COUNT },
+        (_, index) => `${cookieName}-${index}`,
+      ),
+    ];
+
+    for (const name of cookieNames) {
+      res.clearCookie(name, {
+        path: '/',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+      });
+    }
+    res.set({
+      'Cache-Control': 'no-store, max-age=0',
+      Expires: '0',
+      Pragma: 'no-cache',
+    });
 
     res.redirect(
       `https://${domain}/logout?client_id=${clientId}&logout_uri=${logoutUri}`,

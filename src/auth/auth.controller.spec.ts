@@ -90,13 +90,14 @@ describe('AuthController', () => {
     it('redirects to APP_LOGIN_REDIRECT in alb mode', () => {
       tokenService.mode = 'alb';
       process.env.APP_LOGIN_REDIRECT = '/access';
+      const redirect = jest.fn();
       const res = {
-        redirect: jest.fn(),
+        redirect,
       } as unknown as Response;
 
       controller.login(res);
 
-      expect(res.redirect).toHaveBeenCalledWith('/access');
+      expect(redirect).toHaveBeenCalledWith('/access');
     });
 
     it('rejects login when auth mode is dev', () => {
@@ -107,24 +108,47 @@ describe('AuthController', () => {
   });
 
   describe('logout', () => {
-    it('clears the ALB cookie and redirects to Cognito logout', () => {
+    it('expires every ALB auth cookie shard and redirects to Cognito logout', () => {
       tokenService.mode = 'alb';
       process.env.ALB_AUTH_COOKIE_NAME = 'AWSELBAuthSessionCookie';
       process.env.COGNITO_CLIENT_ID = 'client-id';
-      process.env.COGNITO_DOMAIN = 'example.auth.ap-southeast-1.amazoncognito.com';
+      process.env.COGNITO_DOMAIN =
+        'example.auth.ap-southeast-1.amazoncognito.com';
       process.env.APP_LOGOUT_URI = 'http://localhost:4200/login';
 
+      const clearCookie = jest.fn();
+      const set = jest.fn();
+      const redirect = jest.fn();
       const res = {
-        clearCookie: jest.fn(),
-        redirect: jest.fn(),
+        clearCookie,
+        set,
+        redirect,
       } as unknown as Response;
 
       controller.logout(res);
 
-      expect(res.clearCookie).toHaveBeenCalledWith('AWSELBAuthSessionCookie', {
+      const cookieOptions = {
         path: '/',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+      };
+      expect(clearCookie).toHaveBeenCalledTimes(5);
+      for (const name of [
+        'AWSELBAuthSessionCookie',
+        'AWSELBAuthSessionCookie-0',
+        'AWSELBAuthSessionCookie-1',
+        'AWSELBAuthSessionCookie-2',
+        'AWSELBAuthSessionCookie-3',
+      ]) {
+        expect(clearCookie).toHaveBeenCalledWith(name, cookieOptions);
+      }
+      expect(set).toHaveBeenCalledWith({
+        'Cache-Control': 'no-store, max-age=0',
+        Expires: '0',
+        Pragma: 'no-cache',
       });
-      expect(res.redirect).toHaveBeenCalledWith(
+      expect(redirect).toHaveBeenCalledWith(
         'https://example.auth.ap-southeast-1.amazoncognito.com/logout?client_id=client-id&logout_uri=http%3A%2F%2Flocalhost%3A4200%2Flogin',
       );
     });

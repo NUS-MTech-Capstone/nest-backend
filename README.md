@@ -45,8 +45,11 @@ GET /ddm/auth/login
 GET /ddm/auth/logout
 ```
 
-Login is an ALB authentication entry point. Logout clears the ALB session
-cookie and redirects through the Cognito logout endpoint.
+Login is an ALB authentication entry point. Logout expires the ALB session
+cookie and all four possible cookie shards, disables caching of the response,
+and redirects through the Cognito logout endpoint. `APP_LOGOUT_URI` must point
+to an unauthenticated landing page that is registered as an allowed Cognito
+sign-out URL.
 
 ## Development
 

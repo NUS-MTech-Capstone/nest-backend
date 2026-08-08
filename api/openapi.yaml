@@ -133,7 +133,7 @@ paths:
           description: Redirect to the authenticated app.
   /ddm/auth/logout:
     get:
-      summary: Clear local auth state and redirect
+      summary: Expire ALB auth cookies and redirect through Cognito logout
       security: []
       responses:
         "302":
