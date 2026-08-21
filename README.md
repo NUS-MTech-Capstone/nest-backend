@@ -63,6 +63,16 @@ npm run build
 Use `.env.example` as the configuration reference. Local development may use
 the individual `DB_*` settings. Production must use `DATABASE_URL`.
 
+### Dependency security
+
+CI fails on high-severity production dependency findings. A moderate advisory,
+`GHSA-w5hq-g745-h8pq`, remains through Sequelize 6.37.8's required `uuid` 8.x
+dependency because the supported Nest Sequelize adapter requires Sequelize 6
+and upstream has no compatible patched release. Sequelize's current call sites
+use UUID v1 and v4; the advisory affects the v3, v5, and v6 APIs only when a
+caller supplies an output buffer. Keep this residual risk under review and
+remove the exception when the supported Sequelize dependency chain is patched.
+
 Apply migrations before starting the backend locally or in production:
 
 ```bash

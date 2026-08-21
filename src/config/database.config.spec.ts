@@ -1,7 +1,4 @@
-import {
-  buildDatabaseConfig,
-  buildSequelizeOptions,
-} from './database.config';
+import { buildDatabaseConfig, buildSequelizeOptions } from './database.config';
 
 describe('database config', () => {
   const originalEnv = process.env;
@@ -23,6 +20,8 @@ describe('database config', () => {
     process.env.DB_NAME = 'ddm_webapp';
 
     expect(buildSequelizeOptions()).toEqual(
+      // Local development may disable TLS; production and migrations set DB_SSL=true.
+      // nosemgrep: javascript.sequelize.security.audit.sequelize-enforce-tls.sequelize-enforce-tls
       expect.objectContaining({
         dialect: 'postgres',
         host: 'db.local',

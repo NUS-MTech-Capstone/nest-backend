@@ -72,6 +72,7 @@
     "typescript-eslint": "^8.20.0"
   },
   "overrides": {
+    "brace-expansion@1": "1.1.18",
     "multer": "2.2.0"
   },
   "jest": {

@@ -10,7 +10,12 @@ function env(): string {
   return process.env.ENV || process.env.DDM_ENV || 'dev';
 }
 
-function json(level: string, message: unknown, context?: string, extra: Record<string, unknown> = {}): void {
+function json(
+  level: string,
+  message: unknown,
+  context?: string,
+  extra: Record<string, unknown> = {},
+): void {
   const payload = {
     time: new Date().toISOString(),
     level,
@@ -49,8 +54,10 @@ export class JsonLogger implements LoggerService {
 export class RequestIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction): void {
     const requestId =
-      String(req.headers[REQUEST_ID_HEADER] ?? '').trim() || randomUUID();
-    req.headers[REQUEST_ID_HEADER] = requestId;
+      String(
+        req.get?.('x-request-id') ?? req.headers['x-request-id'] ?? '',
+      ).trim() || randomUUID();
+    req.headers['x-request-id'] = requestId;
     res.setHeader(REQUEST_ID_HEADER, requestId);
     const started = Date.now();
     res.on('finish', () => {
@@ -80,7 +87,7 @@ export function shouldSkipRequestLog(
 }
 
 export function requestIdFrom(req: Request): string {
-  return String(req.headers[REQUEST_ID_HEADER] ?? '');
+  return String(req.get?.('x-request-id') ?? req.headers['x-request-id'] ?? '');
 }
 
 export function emitMetric(
@@ -114,7 +121,10 @@ export function emitMetric(
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }
 
-export function emitCount(name: string, dimensions: Record<string, string> = {}): void {
+export function emitCount(
+  name: string,
+  dimensions: Record<string, string> = {},
+): void {
   emitMetric([{ name, unit: 'Count', value: 1 }], dimensions);
 }
 
