@@ -21,6 +21,8 @@ export function validateRuntimeConfig(): void {
     throw new Error('AUTH_MODE must be either "dev" or "alb"');
   }
 
+  validateRedisCacheConfig();
+
   if (process.env.NODE_ENV !== 'production') {
     return;
   }
@@ -35,5 +37,24 @@ export function validateRuntimeConfig(): void {
     throw new Error(
       `Missing required production configuration: ${missing.join(', ')}`,
     );
+  }
+}
+
+function validateRedisCacheConfig(): void {
+  const enabled = process.env.REDIS_CACHE_ENABLED ?? 'false';
+  if (enabled !== 'true' && enabled !== 'false') {
+    throw new Error('REDIS_CACHE_ENABLED must be either "true" or "false"');
+  }
+  if (enabled === 'true' && !process.env.REDIS_URL?.trim()) {
+    throw new Error('REDIS_URL is required when REDIS_CACHE_ENABLED=true');
+  }
+
+  const ttl = process.env.MONITORING_CACHE_TTL_SECONDS ?? '60';
+  if (
+    !/^\d+$/.test(ttl) ||
+    !Number.isSafeInteger(Number(ttl)) ||
+    Number(ttl) <= 0
+  ) {
+    throw new Error('MONITORING_CACHE_TTL_SECONDS must be a positive integer');
   }
 }

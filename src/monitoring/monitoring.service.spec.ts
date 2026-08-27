@@ -2,12 +2,23 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/sequelize';
 import { MonitoringService } from './monitoring.service';
 import { AlertEvent } from './alert-event.entity';
+import {
+  MonitoringCacheService,
+  monitoringMetricCacheKey,
+} from './monitoring-cache.service';
 
 jest.mock('@aws-sdk/client-cloudwatch');
 jest.mock('@aws-sdk/client-cloudwatch-logs');
 
-import { CloudWatchClient, DescribeAlarmsCommand, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
-import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+  GetMetricStatisticsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  CloudWatchLogsClient,
+  FilterLogEventsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 
 describe('MonitoringService', () => {
   let service: MonitoringService;
@@ -17,6 +28,22 @@ describe('MonitoringService', () => {
     findAll: jest.Mock;
     create: jest.Mock;
   };
+  let monitoringCache: {
+    getStatus: jest.Mock;
+    getJSON: jest.Mock;
+    setJSON: jest.Mock;
+  };
+
+  async function buildService(): Promise<MonitoringService> {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MonitoringService,
+        { provide: getModelToken(AlertEvent), useValue: alertEventModel },
+        { provide: MonitoringCacheService, useValue: monitoringCache },
+      ],
+    }).compile();
+    return module.get(MonitoringService);
+  }
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -27,36 +54,57 @@ describe('MonitoringService', () => {
 
     mockSendCw = jest.fn();
     mockSendLogs = jest.fn();
-    (CloudWatchClient as jest.Mock).mockImplementation(() => ({ send: mockSendCw }));
-    (CloudWatchLogsClient as jest.Mock).mockImplementation(() => ({ send: mockSendLogs }));
-    (DescribeAlarmsCommand as unknown as jest.Mock).mockImplementation((input: unknown) => ({
-      input,
+    (CloudWatchClient as jest.Mock).mockImplementation(() => ({
+      send: mockSendCw,
     }));
-    (FilterLogEventsCommand as unknown as jest.Mock).mockImplementation((input: unknown) => ({
-      input,
+    (CloudWatchLogsClient as jest.Mock).mockImplementation(() => ({
+      send: mockSendLogs,
     }));
+    (DescribeAlarmsCommand as unknown as jest.Mock).mockImplementation(
+      (input: unknown) => ({
+        input,
+      }),
+    );
+    (FilterLogEventsCommand as unknown as jest.Mock).mockImplementation(
+      (input: unknown) => ({
+        input,
+      }),
+    );
     (GetMetricStatisticsCommand as unknown as jest.Mock).mockImplementation(
       (input: unknown) => ({ input }),
     );
 
     alertEventModel = {
       findAll: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockResolvedValue({ id: 'alert-1', alarmName: 'HighCPU' }),
+      create: jest
+        .fn()
+        .mockResolvedValue({ id: 'alert-1', alarmName: 'HighCPU' }),
+    };
+    monitoringCache = {
+      getStatus: jest.fn().mockReturnValue({
+        provider: 'redis',
+        enabled: false,
+        available: false,
+        ttlSeconds: 60,
+      }),
+      getJSON: jest.fn().mockResolvedValue(undefined),
+      setJSON: jest.fn().mockResolvedValue(true),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        MonitoringService,
-        { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-      ],
-    }).compile();
-
-    service = module.get(MonitoringService);
+    service = await buildService();
   });
 
   describe('getStatus', () => {
     it('returns configured=false when no region is set', () => {
-      expect(service.getStatus()).toEqual({ configured: false });
+      expect(service.getStatus()).toEqual({
+        configured: false,
+        cache: {
+          provider: 'redis',
+          enabled: false,
+          available: false,
+          ttlSeconds: 60,
+        },
+      });
     });
 
     it('returns configured=true with region and log groups when env is set', async () => {
@@ -64,13 +112,7 @@ describe('MonitoringService', () => {
       process.env.CLOUDWATCH_LOG_GROUP = '/ecs/api';
       process.env.CLOUDWATCH_SESSION_LOG_GROUP = '/ecs/sessions';
 
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MonitoringService,
-          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-        ],
-      }).compile();
-      const configuredService = module.get(MonitoringService);
+      const configuredService = await buildService();
 
       expect(configuredService.getStatus()).toEqual({
         configured: true,
@@ -78,6 +120,12 @@ describe('MonitoringService', () => {
         logGroup: '/ecs/api',
         sessionLogGroup: '/ecs/sessions',
         awsAuthorized: true,
+        cache: {
+          provider: 'redis',
+          enabled: false,
+          available: false,
+          ttlSeconds: 60,
+        },
       });
     });
 
@@ -87,13 +135,7 @@ describe('MonitoringService', () => {
         Object.assign(new Error('not authorized'), { name: 'AccessDenied' }),
       );
 
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MonitoringService,
-          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-        ],
-      }).compile();
-      const configuredService = module.get(MonitoringService);
+      const configuredService = await buildService();
 
       await configuredService.getAlarms();
 
@@ -101,7 +143,9 @@ describe('MonitoringService', () => {
         expect.objectContaining({
           configured: true,
           awsAuthorized: false,
-          authorizationHint: expect.stringContaining('CloudWatch read permissions'),
+          authorizationHint: expect.stringContaining(
+            'CloudWatch read permissions',
+          ),
         }),
       );
     });
@@ -115,13 +159,7 @@ describe('MonitoringService', () => {
 
     it('maps CloudWatch alarm results when configured', async () => {
       process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MonitoringService,
-          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-        ],
-      }).compile();
-      const configuredService = module.get(MonitoringService);
+      const configuredService = await buildService();
 
       const updatedAt = new Date('2026-06-18T00:00:00.000Z');
       mockSendCw.mockResolvedValue({
@@ -150,20 +188,50 @@ describe('MonitoringService', () => {
           updatedAt: updatedAt.toISOString(),
         },
       ]);
+      expect(monitoringCache.setJSON).toHaveBeenCalledWith(
+        'ddm:nest-backend:monitoring:v1:alarms',
+        alarms,
+      );
+    });
+
+    it('returns a cached alarm response without calling CloudWatch', async () => {
+      process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
+      const cached = [
+        {
+          name: 'CachedAlarm',
+          state: 'OK',
+          metric: 'CPUUtilization',
+          namespace: 'AWS/EC2',
+          updatedAt: '2026-06-18T00:00:00.000Z',
+        },
+      ];
+      monitoringCache.getJSON.mockResolvedValue(cached);
+      const configuredService = await buildService();
+
+      await expect(configuredService.getAlarms()).resolves.toBe(cached);
+      expect(mockSendCw).not.toHaveBeenCalled();
+      expect(monitoringCache.setJSON).not.toHaveBeenCalled();
+    });
+
+    it('caches a successful empty alarm response', async () => {
+      process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
+      mockSendCw.mockResolvedValue({ MetricAlarms: [] });
+      const configuredService = await buildService();
+
+      await expect(configuredService.getAlarms()).resolves.toEqual([]);
+      expect(monitoringCache.setJSON).toHaveBeenCalledWith(
+        'ddm:nest-backend:monitoring:v1:alarms',
+        [],
+      );
     });
 
     it('returns empty array when CloudWatch send fails', async () => {
       process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MonitoringService,
-          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-        ],
-      }).compile();
-      const configuredService = module.get(MonitoringService);
+      const configuredService = await buildService();
 
       mockSendCw.mockRejectedValue(new Error('AccessDenied'));
       await expect(configuredService.getAlarms()).resolves.toEqual([]);
+      expect(monitoringCache.setJSON).not.toHaveBeenCalled();
     });
   });
 
@@ -180,24 +248,24 @@ describe('MonitoringService', () => {
 
     it('maps sorted metric datapoints and current value when configured', async () => {
       process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MonitoringService,
-          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-        ],
-      }).compile();
-      const configuredService = module.get(MonitoringService);
+      const configuredService = await buildService();
 
       mockSendCw.mockResolvedValue({
         Datapoints: [
-          { Timestamp: new Date('2026-06-18T01:00:00.000Z'), Sum: 5, Unit: 'Count' },
-          { Timestamp: new Date('2026-06-18T02:00:00.000Z'), Sum: 12, Unit: 'Count' },
+          {
+            Timestamp: new Date('2026-06-18T01:00:00.000Z'),
+            Sum: 5,
+            Unit: 'Count',
+          },
+          {
+            Timestamp: new Date('2026-06-18T02:00:00.000Z'),
+            Sum: 12,
+            Unit: 'Count',
+          },
         ],
       });
 
-      await expect(
-        configuredService.getMetrics('RequestCount', 'DenDenMushi', 24),
-      ).resolves.toEqual({
+      const expected = {
         name: 'RequestCount',
         namespace: 'DenDenMushi',
         unit: 'Count',
@@ -212,7 +280,34 @@ describe('MonitoringService', () => {
             value: 12,
           },
         ],
-      });
+      };
+      await expect(
+        configuredService.getMetrics('RequestCount', 'DenDenMushi', 24),
+      ).resolves.toEqual(expected);
+      expect(monitoringCache.setJSON).toHaveBeenCalledWith(
+        monitoringMetricCacheKey('RequestCount', 'DenDenMushi', 24, 3600),
+        expected,
+      );
+    });
+
+    it('uses parameter-specific metric cache keys and bypasses CloudWatch on a hit', async () => {
+      process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
+      const cached = {
+        name: 'CPUUtilization',
+        namespace: 'AWS/EC2',
+        unit: 'Percent',
+        dataPoints: [],
+      };
+      monitoringCache.getJSON.mockResolvedValue(cached);
+      const configuredService = await buildService();
+
+      await expect(
+        configuredService.getMetrics('CPUUtilization', 'AWS/EC2', 6, 300),
+      ).resolves.toBe(cached);
+      expect(monitoringCache.getJSON).toHaveBeenCalledWith(
+        monitoringMetricCacheKey('CPUUtilization', 'AWS/EC2', 6, 300),
+      );
+      expect(mockSendCw).not.toHaveBeenCalled();
     });
   });
 
@@ -225,13 +320,7 @@ describe('MonitoringService', () => {
     it('maps CloudWatch log events when application log group is configured', async () => {
       process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
       process.env.CLOUDWATCH_LOG_GROUP = '/ecs/api';
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MonitoringService,
-          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-        ],
-      }).compile();
-      const configuredService = module.get(MonitoringService);
+      const configuredService = await buildService();
 
       mockSendLogs.mockResolvedValue({
         events: [
@@ -243,25 +332,23 @@ describe('MonitoringService', () => {
         ],
       });
 
-      await expect(configuredService.getApplicationLogs(50, 'ERROR')).resolves.toEqual([
+      await expect(
+        configuredService.getApplicationLogs(50, 'ERROR'),
+      ).resolves.toEqual([
         {
           timestamp: new Date(1_718_678_400_000).toISOString(),
           message: 'ERROR something failed',
           logStream: 'api/stream-1',
         },
       ]);
+      expect(monitoringCache.getJSON).not.toHaveBeenCalled();
+      expect(monitoringCache.setJSON).not.toHaveBeenCalled();
     });
 
     it('defaults session log filter pattern to "session"', async () => {
       process.env.CLOUDWATCH_REGION = 'ap-southeast-1';
       process.env.CLOUDWATCH_SESSION_LOG_GROUP = '/ecs/sessions';
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MonitoringService,
-          { provide: getModelToken(AlertEvent), useValue: alertEventModel },
-        ],
-      }).compile();
-      const configuredService = module.get(MonitoringService);
+      const configuredService = await buildService();
 
       mockSendLogs.mockResolvedValue({ events: [] });
 
@@ -311,6 +398,8 @@ describe('MonitoringService', () => {
           source: 'cloudwatch',
         }),
       );
+      expect(monitoringCache.getJSON).not.toHaveBeenCalled();
+      expect(monitoringCache.setJSON).not.toHaveBeenCalled();
     });
   });
 });

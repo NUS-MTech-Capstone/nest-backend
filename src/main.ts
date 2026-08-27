@@ -3,10 +3,7 @@ import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import {
-  API_VERSION_HEADER,
-  SERVICE_NAME,
-} from './common/service.constants';
+import { API_VERSION_HEADER, SERVICE_NAME } from './common/service.constants';
 import { JsonLogger, REQUEST_ID_HEADER } from './common/observability';
 import { validateRuntimeConfig } from './config/runtime.config';
 
@@ -27,7 +24,12 @@ function configureCors(app: INestApplication): void {
 
   app.enableCors({
     origin: origins.length === 1 ? origins[0] : origins,
-    allowedHeaders: ['Content-Type', 'Authorization', API_VERSION_HEADER, REQUEST_ID_HEADER],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      API_VERSION_HEADER,
+      REQUEST_ID_HEADER,
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 }
@@ -39,6 +41,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new JsonLogger(),
   });
+  app.enableShutdownHooks();
 
   app.setGlobalPrefix(SERVICE_NAME, {
     exclude: [
@@ -59,9 +62,14 @@ async function bootstrap() {
   logger.log(`${SERVICE_NAME} service listening on port ${port}`);
   logger.log(`Health: http://localhost:${port}/healthz`);
   logger.log(`Ready: http://localhost:${port}/readyz`);
-  logger.log(`Auth config: http://localhost:${port}/${SERVICE_NAME}/auth/config`);
-  if (process.env.CORS_ENABLED !== 'false' && process.env.NODE_ENV !== 'production') {
+  logger.log(
+    `Auth config: http://localhost:${port}/${SERVICE_NAME}/auth/config`,
+  );
+  if (
+    process.env.CORS_ENABLED !== 'false' &&
+    process.env.NODE_ENV !== 'production'
+  ) {
     logger.log('CORS enabled for local frontend development');
   }
 }
-bootstrap();
+void bootstrap();

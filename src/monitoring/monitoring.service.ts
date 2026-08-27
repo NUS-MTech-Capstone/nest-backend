@@ -11,6 +11,12 @@ import {
   FilterLogEventsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import { AlertEvent } from './alert-event.entity';
+import {
+  MONITORING_ALARMS_CACHE_KEY,
+  MonitoringCacheService,
+  type MonitoringCacheStatus,
+  monitoringMetricCacheKey,
+} from './monitoring-cache.service';
 
 export interface AlarmSummary {
   name: string;
@@ -49,6 +55,7 @@ export interface MonitoringStatus {
   /** False after the first AWS AccessDenied response from CloudWatch/Logs. */
   awsAuthorized?: boolean;
   authorizationHint?: string;
+  cache: MonitoringCacheStatus;
 }
 
 @Injectable()
@@ -68,19 +75,27 @@ export class MonitoringService {
   constructor(
     @InjectModel(AlertEvent)
     private alertEventModel: typeof AlertEvent,
+    private readonly monitoringCache: MonitoringCacheService,
   ) {
     this.region = process.env.CLOUDWATCH_REGION ?? process.env.AWS_REGION ?? '';
     this.logGroup = process.env.CLOUDWATCH_LOG_GROUP ?? '';
-    this.sessionLogGroup = process.env.CLOUDWATCH_SESSION_LOG_GROUP ?? process.env.CLOUDWATCH_LOG_GROUP ?? '';
+    this.sessionLogGroup =
+      process.env.CLOUDWATCH_SESSION_LOG_GROUP ??
+      process.env.CLOUDWATCH_LOG_GROUP ??
+      '';
     this.namespace = process.env.CLOUDWATCH_NAMESPACE ?? 'DenDenMushi';
     this.configured = Boolean(this.region);
 
     if (this.configured) {
       this.cloudwatch = new CloudWatchClient({ region: this.region });
       this.cwLogs = new CloudWatchLogsClient({ region: this.region });
-      this.logger.log(`CloudWatch configured: region=${this.region}, namespace=${this.namespace}`);
+      this.logger.log(
+        `CloudWatch configured: region=${this.region}, namespace=${this.namespace}`,
+      );
     } else {
-      this.logger.warn('CloudWatch not configured (CLOUDWATCH_REGION not set) — monitoring endpoints will return empty data');
+      this.logger.warn(
+        'CloudWatch not configured (CLOUDWATCH_REGION not set) — monitoring endpoints will return empty data',
+      );
     }
   }
 
@@ -91,7 +106,10 @@ export class MonitoringService {
       logGroup: this.logGroup || undefined,
       sessionLogGroup: this.sessionLogGroup || undefined,
       awsAuthorized: this.configured ? !this.authorizationFailed : undefined,
-      authorizationHint: this.authorizationFailed ? this.authorizationHint : undefined,
+      authorizationHint: this.authorizationFailed
+        ? this.authorizationHint
+        : undefined,
+      cache: this.monitoringCache.getStatus(),
     };
   }
 
@@ -124,17 +142,27 @@ export class MonitoringService {
   async getAlarms(): Promise<AlarmSummary[]> {
     if (!this.cloudwatch) return [];
 
+    const cached = await this.monitoringCache.getJSON<AlarmSummary[]>(
+      MONITORING_ALARMS_CACHE_KEY,
+    );
+    if (cached !== undefined) {
+      return cached;
+    }
+
     try {
       const result = await this.cloudwatch.send(new DescribeAlarmsCommand({}));
-      return (result.MetricAlarms ?? []).map((a: MetricAlarm) => ({
+      const alarms = (result.MetricAlarms ?? []).map((a: MetricAlarm) => ({
         name: a.AlarmName ?? 'Unknown',
         state: (a.StateValue ?? 'INSUFFICIENT_DATA') as AlarmSummary['state'],
         description: a.AlarmDescription,
         metric: a.MetricName ?? '',
         namespace: a.Namespace ?? '',
         threshold: a.Threshold,
-        updatedAt: a.StateUpdatedTimestamp?.toISOString() ?? new Date().toISOString(),
+        updatedAt:
+          a.StateUpdatedTimestamp?.toISOString() ?? new Date().toISOString(),
       }));
+      await this.monitoringCache.setJSON(MONITORING_ALARMS_CACHE_KEY, alarms);
+      return alarms;
     } catch (err) {
       this.noteAuthorizationFailure(err, 'fetch CloudWatch alarms');
       return [];
@@ -151,6 +179,17 @@ export class MonitoringService {
   ): Promise<MetricSummary> {
     if (!this.cloudwatch) {
       return { name: metricName, namespace, unit: 'Count', dataPoints: [] };
+    }
+
+    const cacheKey = monitoringMetricCacheKey(
+      metricName,
+      namespace,
+      hours,
+      period,
+    );
+    const cached = await this.monitoringCache.getJSON<MetricSummary>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
     }
 
     const endTime = new Date();
@@ -179,13 +218,15 @@ export class MonitoringService {
 
       const current = dataPoints.at(-1)?.value;
 
-      return {
+      const summary = {
         name: metricName,
         namespace,
         unit: result.Datapoints?.[0]?.Unit ?? 'Count',
         dataPoints,
         current,
       };
+      await this.monitoringCache.setJSON(cacheKey, summary);
+      return summary;
     } catch (err) {
       this.noteAuthorizationFailure(err, `fetch metric ${metricName}`);
       return { name: metricName, namespace, unit: 'Count', dataPoints: [] };
@@ -194,11 +235,17 @@ export class MonitoringService {
 
   // ── Logs ─────────────────────────────────────────────────────────────────
 
-  async getApplicationLogs(limit = 100, filterPattern?: string): Promise<LogEvent[]> {
+  async getApplicationLogs(
+    limit = 100,
+    filterPattern?: string,
+  ): Promise<LogEvent[]> {
     return this.queryLogs(this.logGroup, limit, filterPattern);
   }
 
-  async getSessionLogs(limit = 100, filterPattern?: string): Promise<LogEvent[]> {
+  async getSessionLogs(
+    limit = 100,
+    filterPattern?: string,
+  ): Promise<LogEvent[]> {
     const pattern = filterPattern ?? 'session';
     return this.queryLogs(this.sessionLogGroup, limit, pattern);
   }
@@ -245,13 +292,23 @@ export class MonitoringService {
   }
 
   async recordAlert(payload: Record<string, unknown>): Promise<AlertEvent> {
-    const alarmName = String(payload['AlarmName'] ?? payload['alarmName'] ?? 'Unknown Alarm');
-    const state = String(payload['NewStateValue'] ?? payload['state'] ?? 'ALARM');
+    const alarmName = String(
+      payload['AlarmName'] ?? payload['alarmName'] ?? 'Unknown Alarm',
+    );
+    const state = String(
+      payload['NewStateValue'] ?? payload['state'] ?? 'ALARM',
+    );
     const description = payload['AlarmDescription'] ?? payload['description'];
-    const metric = String(payload['Trigger']?.['MetricName'] ?? payload['metric'] ?? '');
+    const metric = String(
+      payload['Trigger']?.['MetricName'] ?? payload['metric'] ?? '',
+    );
     const source = 'cloudwatch';
     const triggeredAt = new Date(
-      String(payload['StateChangeTime'] ?? payload['triggeredAt'] ?? new Date().toISOString()),
+      String(
+        payload['StateChangeTime'] ??
+          payload['triggeredAt'] ??
+          new Date().toISOString(),
+      ),
     );
 
     return this.alertEventModel.create({

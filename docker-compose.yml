@@ -9,13 +9,25 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - '5432:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ddm} -d ${DB_NAME:-ddm}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-ddm} -d ${DB_NAME:-ddm}']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    profiles: ['cache']
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   api:
     build:
@@ -38,10 +50,13 @@ services:
       DEV_JWT_SECRET: ${DEV_JWT_SECRET:-dev-secret-change-me}
       CORS_ENABLED: ${CORS_ENABLED:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4200}
+      REDIS_CACHE_ENABLED: ${REDIS_CACHE_ENABLED:-false}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      MONITORING_CACHE_TTL_SECONDS: ${MONITORING_CACHE_TTL_SECONDS:-60}
     ports:
-      - "3000:3000"
+      - '3000:3000'
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/readyz || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/readyz || exit 1']
       interval: 15s
       timeout: 5s
       retries: 5
@@ -49,3 +64,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

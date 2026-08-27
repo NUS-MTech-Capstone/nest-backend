@@ -204,6 +204,36 @@ Adjust the account ID, region, and log group ARNs to match your cluster. Without
 these permissions the monitoring page loads but metrics/logs/alarms stay empty
 and the API reports `awsAuthorized: false`.
 
+### Optional Redis monitoring cache
+
+Successful CloudWatch alarm and metric queries can be cached in Redis to reduce
+repeated AWS API calls. The cache is disabled by default and is never used for
+authentication, authorization, logs, alert records, session state, audit data,
+or terminal traffic.
+
+```bash
+REDIS_CACHE_ENABLED=false
+REDIS_URL=redis://localhost:6379
+MONITORING_CACHE_TTL_SECONDS=60
+```
+
+When enabled, `REDIS_URL` is required and the TTL must be a positive integer
+number of seconds. Redis connects asynchronously and is not part of readiness. Cache
+connection, read, or write failures fall back to CloudWatch, and unsuccessful
+CloudWatch responses are not cached. Values larger than 256 KiB are also
+skipped.
+
+For a local container demo, start the optional Compose profile:
+
+```bash
+REDIS_CACHE_ENABLED=true docker compose --profile cache up --build
+```
+
+`GET /ddm/monitoring/status` reports the cache provider, enabled state,
+availability, and TTL. Production deployments remain disabled unless an
+operator supplies an external Redis service and explicitly enables the flag;
+this project does not provision production Redis infrastructure.
+
 ## API Specification
 
 The OpenAPI contract is checked in at `api/openapi.yaml` and is served
