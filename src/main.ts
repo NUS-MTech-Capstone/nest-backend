@@ -1,38 +1,11 @@
 import 'dotenv/config';
 import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
-import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { API_VERSION_HEADER, SERVICE_NAME } from './common/service.constants';
-import { JsonLogger, REQUEST_ID_HEADER } from './common/observability';
+import { SERVICE_NAME } from './common/service.constants';
+import { JsonLogger } from './common/observability';
+import { configureCors, configureSecurityHeaders } from './common/security';
 import { validateRuntimeConfig } from './config/runtime.config';
-
-function configureCors(app: INestApplication): void {
-  const corsEnabled =
-    process.env.CORS_ENABLED === 'true' ||
-    (process.env.CORS_ENABLED !== 'false' &&
-      process.env.NODE_ENV !== 'production');
-
-  if (!corsEnabled) {
-    return;
-  }
-
-  const origins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  app.enableCors({
-    origin: origins.length === 1 ? origins[0] : origins,
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      API_VERSION_HEADER,
-      REQUEST_ID_HEADER,
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  });
-}
 
 async function bootstrap() {
   validateRuntimeConfig();
@@ -42,6 +15,7 @@ async function bootstrap() {
     logger: new JsonLogger(),
   });
   app.enableShutdownHooks();
+  configureSecurityHeaders(app);
 
   app.setGlobalPrefix(SERVICE_NAME, {
     exclude: [

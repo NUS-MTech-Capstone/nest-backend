@@ -51,6 +51,13 @@ and redirects through the Cognito logout endpoint. `APP_LOGOUT_URI` must point
 to an unauthenticated landing page that is registered as an allowed Cognito
 sign-out URL.
 
+All responses disable caching and include MIME-sniffing, framing, and referrer
+protections. The Express `X-Powered-By` banner is disabled. Production uses
+same-origin browser APIs and leaves CORS disabled. Local development may set
+`CORS_ENABLED=true` and a comma-separated `CORS_ORIGINS` list of exact
+`http://` or `https://` origins. Wildcards and credentialed cross-origin
+requests are intentionally unsupported.
+
 ## Development
 
 ```bash
