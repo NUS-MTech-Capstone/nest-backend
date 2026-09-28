@@ -29,7 +29,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.1067.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
-    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-express": "^11.2.6",
     "@nestjs/sequelize": "^11.0.1",
     "aws-jwt-verify": "^5.2.1",
     "class-transformer": "^0.5.1",
@@ -74,7 +74,10 @@
   },
   "overrides": {
     "brace-expansion@1": "1.1.18",
-    "multer": "2.2.0"
+    "fflate": "0.8.3",
+    "multer": "2.3.0",
+    "qs": "6.16.0",
+    "uuid": "11.1.1"
   },
   "jest": {
     "moduleFileExtensions": [
