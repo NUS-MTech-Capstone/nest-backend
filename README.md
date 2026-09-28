@@ -237,9 +237,18 @@ REDIS_CACHE_ENABLED=true docker compose --profile cache up --build
 ```
 
 `GET /ddm/monitoring/status` reports the cache provider, enabled state,
-availability, and TTL. Production deployments remain disabled unless an
-operator supplies an external Redis service and explicitly enables the flag;
-this project does not provision production Redis infrastructure.
+availability, and TTL. The Kubernetes development environment enables this
+cache against its internal, non-persistent Redis service:
+
+```bash
+REDIS_CACHE_ENABLED=true
+REDIS_URL=redis://redis.dendenmushi-webapp.svc.cluster.local:6379
+MONITORING_CACHE_TTL_SECONDS=60
+```
+
+That Redis pod is a disposable optimization. NetworkPolicy restricts access to
+Nest Backend, and a restart, suspension, or reschedule may discard all cached
+values without affecting durable application state.
 
 ## API Specification
 
