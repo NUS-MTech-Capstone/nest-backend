@@ -9,6 +9,8 @@ jobs:
   ci:
     uses: NUS-MTech-Capstone/github-actions-shared/.github/workflows/node-ci.yaml@main
     with:
-      node-version: "22"
+      node-version: '22'
       test-command: npm test -- --runInBand --coverage --watchman=false
       build-command: npm run build
+      sca-command: npm run audit:prod
+      sca-artifact-path: npm-audit.json

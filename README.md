@@ -68,17 +68,26 @@ npm run build
 ```
 
 Use `.env.example` as the configuration reference. Local development may use
-the individual `DB_*` settings. Production must use `DATABASE_URL`.
+the individual `DB_*` settings. Production must use `DATABASE_URL` and set
+`DB_SSL=true`; application startup and migrations reject production
+configuration that does not enable database TLS.
 
 ### Dependency security
 
-CI fails on high-severity production dependency findings. A moderate advisory,
-`GHSA-w5hq-g745-h8pq`, remains through Sequelize 6.37.8's required `uuid` 8.x
-dependency because the supported Nest Sequelize adapter requires Sequelize 6
-and upstream has no compatible patched release. Sequelize's current call sites
-use UUID v1 and v4; the advisory affects the v3, v5, and v6 APIs only when a
-caller supplies an output buffer. Keep this residual risk under review and
-remove the exception when the supported Sequelize dependency chain is patched.
+CI runs `npm run audit:prod`, fails on unexpected moderate-or-higher
+production dependency findings, and retains the JSON report as an artifact.
+
+A temporary exception covers the four related moderate records in the chain
+`umzug -> @rushstack/ts-command-line -> argparse -> sprintf-js`, rooted in
+`GHSA-hp3w-g68c-fv3c`. The backend uses Umzug's programmatic migration API with
+fixed application inputs; it does not expose Umzug's CLI parser or accept
+user-controlled format strings. The exception is encoded narrowly in the audit
+policy. Approved entries are omitted from the standard `vulnerabilities` and
+severity counts in the published `npm-audit.json`, while an `auditPolicy`
+section records the suppressed packages, advisory, rationale, and review date.
+The exception must be reviewed by the repository maintainers no later than
+7 November 2026 and removed when Umzug ships a compatible patched dependency
+chain. Do not use `npm audit fix --force` to downgrade Umzug.
 
 Apply migrations before starting the backend locally or in production:
 

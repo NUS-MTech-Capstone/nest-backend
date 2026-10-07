@@ -6,8 +6,10 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "audit:prod": "node scripts/audit-production.mjs npm-audit.json",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "pretest": "npm run test:audit-policy",
     "start": "nest start",
     "start:dev": "cross-env NODE_ENV=development nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -21,7 +23,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:audit-policy": "node --test scripts/audit-policy.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1070.0",
@@ -75,7 +78,6 @@
   "overrides": {
     "brace-expansion@1": "1.1.21",
     "fflate": "0.8.3",
-    "multer": "2.3.0",
     "qs": "6.16.0",
     "uuid": "11.1.1"
   },
