@@ -9,6 +9,9 @@ export interface StsChangeRequestResponse {
   crId: string;
   status: ChangeRequestStatus;
   hostIds: string[];
+  implementationStartAt: Date;
+  implementationEndAt: Date;
+  allowedRoles: string[];
 }
 
 @Controller('sts/change-requests')
@@ -35,6 +38,9 @@ export class StsChangeRequestController {
       crId: request.id,
       status: request.status,
       hostIds: vms.map((vm) => vm.hostname),
+      implementationStartAt: request.implementationStartAt,
+      implementationEndAt: request.implementationEndAt,
+      allowedRoles: request.allowedRoles,
     };
   }
 }

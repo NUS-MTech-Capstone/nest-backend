@@ -129,6 +129,21 @@ The endpoint resolves `{hostId}` by VM UUID or hostname, returns address data
 from `virtual_machines`, and enriches SSH-only metadata from
 `SERVER_INVENTORY_STATIC_JSON` or the `SERVER_INVENTORY_DEFAULT_*` env vars.
 STS should configure `CHANGE_REQUEST_URL=http://nest-backend:3000/sts`.
+
+The trusted response includes `crId`, `status`, resolved gateway `hostIds`,
+`implementationStartAt`, `implementationEndAt`, and `allowedRoles`. Dates are
+serialized as UTC ISO 8601 strings. These values come from the stored CR;
+no browser-provided authorization metadata is substituted. An empty VM scope
+returns `hostIds: []`, which STS denies. STS requires an explicit role match for
+ordinary actors; Admin bypasses role matching only. Access-tab visibility is
+not authorization: STS independently checks approval, window, groups, and scope.
+
+Roll out this additive response before Proxy Control Plane's verified actor-group
+forwarding and STS enforcement. Existing database fields are reused; no migration
+is required for this contract. The HTTP contract fixture is tested in
+`src/change-request/sts-change-request.controller.spec.ts` and consumed by the
+optional Proxy Control Plane cross-repository integration test.
+
 The change-request endpoint returns the approval status and gateway host IDs
 derived from the CR's scoped VM IDs.
 
