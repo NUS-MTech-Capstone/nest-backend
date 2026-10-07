@@ -73,7 +73,7 @@
     "typescript-eslint": "^8.20.0"
   },
   "overrides": {
-    "brace-expansion@1": "1.1.18",
+    "brace-expansion@1": "1.1.21",
     "fflate": "0.8.3",
     "multer": "2.3.0",
     "qs": "6.16.0",
