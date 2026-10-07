@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: DenDenMushi Nest Backend API
   version: 0.1.0
-  description: Web application API for auth, identity administration, change requests, inventory, implementer groups, sessions, and monitoring. Business endpoints require the `x-api-version: 1` header; health, readiness, OpenAPI, root, ALB login/logout redirects, and the SNS alert webhook are exempt.
+  description: "Web application API for auth, identity administration, change requests, inventory, implementer groups, sessions, and monitoring. Business endpoints require the `x-api-version: 1` header; health, readiness, OpenAPI, root, ALB login/logout redirects, and the SNS alert webhook are exempt."
 servers:
   - url: http://localhost:3000
     description: Local Nest backend; application APIs are under /ddm.
@@ -84,7 +84,7 @@ paths:
   /sts/change-requests/{crId}:
     get:
       summary: Internal STS change-request lookup
-      description: Resolves a change request to approval status and gateway host IDs in scope.
+      description: Returns trusted approval status, UTC implementation window, role entitlement and explicit gateway host scope for STS.
       security: []
       parameters:
         - name: crId
@@ -99,13 +99,23 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [crId, status, hostIds]
+                required: [crId, status, hostIds, implementationStartAt, implementationEndAt, allowedRoles]
                 properties:
                   crId:
                     type: string
                   status:
                     type: string
                     enum: [Pending, Approved, Rejected]
+                  implementationStartAt:
+                    type: string
+                    format: date-time
+                  implementationEndAt:
+                    type: string
+                    format: date-time
+                  allowedRoles:
+                    type: array
+                    items: {type: string}
+                    description: Cognito groups entitled to the CR. Empty denies ordinary actors; Admin bypasses role matching only.
                   hostIds:
                     type: array
                     items:
