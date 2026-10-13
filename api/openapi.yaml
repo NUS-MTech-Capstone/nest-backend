@@ -2,60 +2,85 @@ openapi: 3.1.0
 info:
   title: DenDenMushi Nest Backend API
   version: 0.1.0
-  description: "Web application API for auth, identity administration, change requests, inventory, implementer groups, sessions, and monitoring. Business endpoints require the `x-api-version: 1` header; health, readiness, OpenAPI, root, ALB login/logout redirects, and the SNS alert webhook are exempt."
+  description: 'Web application API for auth, identity administration, change requests, inventory, implementer groups,
+    sessions, and monitoring. Business endpoints require the `x-api-version: 1` header; health, readiness, OpenAPI,
+    root, ALB login/logout redirects, and the SNS alert webhook are exempt. Terminal session APIs are owned by Proxy
+    Control Plane at /sessions; Nest does not serve /ddm/sessions. Internal /servers and /sts routes rely on cluster
+    network restrictions. Login, logout, probes, specification and the SNS webhook are exempt from API version checks.'
 servers:
-  - url: http://localhost:3000
-    description: Local Nest backend; application APIs are under /ddm.
+- url: https://api.ddm.keiyam.me
+  description: AWS dev public origin.
+- url: http://localhost:3000
+  description: Direct service address; public services are accessed through the authenticated ALB.
 paths:
   /healthz:
     get:
       summary: Liveness probe outside the /ddm prefix
       security: []
       responses:
-        "200":
+        '200':
           description: Process is running.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProbeResponse"
+                $ref: '#/components/schemas/ProbeResponse'
   /readyz:
     get:
       summary: Readiness probe outside the /ddm prefix
       security: []
       responses:
-        "200":
+        '200':
           description: Process and PostgreSQL are ready.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProbeResponse"
+                $ref: '#/components/schemas/ProbeResponse'
+        '503':
+          description: PostgreSQL is unavailable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - unavailable
+                  service:
+                    type: string
+                    enum:
+                    - ddm
+                required:
+                - status
+                - service
   /servers/{hostId}:
     get:
       summary: Internal STS server inventory lookup
       description: Resolves a webapp VM UUID or gateway host ID to the SSH target metadata required by STS.
       security: []
       parameters:
-        - name: hostId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: hostId
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
+        '200':
           description: Server inventory record.
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - hostId
-                  - hostname
-                  - address
-                  - status
-                  - connectionType
-                  - username
-                  - credentialSecretId
-                  - hostPublicKey
+                - hostId
+                - hostname
+                - address
+                - status
+                - connectionType
+                - username
+                - credentialSecretId
+                - hostPublicKey
                 properties:
                   hostId:
                     type: string
@@ -67,7 +92,8 @@ paths:
                     type: string
                   connectionType:
                     type: string
-                    enum: [ssh]
+                    enum:
+                    - ssh
                   username:
                     type: string
                   credentialSecretId:
@@ -77,35 +103,60 @@ paths:
                   automation:
                     type: object
                     additionalProperties: true
-        "404":
+        '404':
           description: Server not found.
-        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
           description: Server exists but SSH inventory metadata is incomplete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /sts/change-requests/{crId}:
     get:
       summary: Internal STS change-request lookup
-      description: Returns trusted approval status, UTC implementation window, role entitlement and explicit gateway host scope for STS.
+      description: Returns trusted approval status, UTC implementation window, role entitlement and explicit gateway
+        host scope for STS.
       security: []
       parameters:
-        - name: crId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: crId
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
+        '200':
           description: Change-request authorization metadata.
           content:
             application/json:
               schema:
                 type: object
-                required: [crId, status, hostIds, implementationStartAt, implementationEndAt, allowedRoles]
+                required:
+                - crId
+                - status
+                - hostIds
+                - implementationStartAt
+                - implementationEndAt
+                - allowedRoles
                 properties:
                   crId:
                     type: string
                   status:
                     type: string
-                    enum: [Pending, Approved, Rejected]
+                    enum:
+                    - Pending
+                    - Approved
+                    - Rejected
                   implementationStartAt:
                     type: string
                     format: date-time
@@ -114,40 +165,85 @@ paths:
                     format: date-time
                   allowedRoles:
                     type: array
-                    items: {type: string}
-                    description: Cognito groups entitled to the CR. Empty denies ordinary actors; Admin bypasses role matching only.
+                    items:
+                      type: string
+                    description: Cognito groups entitled to the CR. Empty denies ordinary actors; Admin bypasses
+                      role matching only.
                   hostIds:
                     type: array
                     items:
                       type: string
-        "404":
+        '404':
           description: Change request not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/auth/config:
     get:
       summary: Get frontend authentication configuration
       security: []
       responses:
-        "200":
-          description: Authentication configuration.
+        '200':
+          description: Successful response.
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/AuthConfig'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/auth/login:
     get:
       summary: Start ALB/Cognito login redirect
       security: []
       responses:
-        "302":
+        '302':
           description: Redirect to the authenticated app.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/auth/logout:
     get:
       summary: Expire ALB auth cookies and redirect through Cognito logout
       security: []
       responses:
-        "302":
+        '302':
           description: Redirect after logout.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/auth/dev-login:
     post:
       summary: Development-only login helper
@@ -158,52 +254,98 @@ paths:
           application/json:
             schema:
               type: object
-              required: [username]
+              required:
+              - username
               properties:
                 username:
                   type: string
       responses:
-        "200":
-          description: Development login response.
+        '400':
+          $ref: '#/components/responses/Error'
+        '201':
+          description: Successful response.
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/DevLoginResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/auth/me:
     get:
       summary: Get the authenticated user
       responses:
-        "200":
-          description: Current user.
+        '200':
+          description: Successful response.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthUser"
+                $ref: '#/components/schemas/CurrentUser'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/identity/roles:
     get:
       summary: List supported identity roles
       responses:
-        "200":
-          description: Role names.
+        '200':
+          description: Successful response.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: string
+                $ref: '#/components/schemas/IdentityRoles'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/identity/users:
     get:
       summary: List Cognito users
       responses:
-        "200":
+        '200':
           description: Users.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/User"
+                  $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
     post:
       summary: Create a Cognito user
       requestBody:
@@ -211,60 +353,120 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateUserRequest"
+              $ref: '#/components/schemas/CreateUserRequest'
       responses:
-        "201":
-          description: Created user.
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/identity/users/{username}/status:
     patch:
       summary: Enable or disable a Cognito user
       parameters:
-        - $ref: "#/components/parameters/Username"
+      - $ref: '#/components/parameters/Username'
+      - $ref: '#/components/parameters/APIVersion'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [enabled]
+              required:
+              - enabled
               properties:
                 enabled:
                   type: boolean
       responses:
-        "200":
-          description: Updated user status.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/identity/users/{username}/roles:
     put:
       summary: Replace Cognito user roles
       parameters:
-        - $ref: "#/components/parameters/Username"
+      - $ref: '#/components/parameters/Username'
+      - $ref: '#/components/parameters/APIVersion'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [roles]
+              required:
+              - roles
               properties:
                 roles:
                   type: array
                   items:
                     type: string
       responses:
-        "200":
-          description: Updated user roles.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/identity/policies:
     get:
       summary: List role permission policies
       responses:
-        "200":
+        '200':
           description: Policy rows.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PolicyRow"
+                  $ref: '#/components/schemas/PolicyRow'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
     put:
       summary: Replace role permission policies
       requestBody:
@@ -273,27 +475,58 @@ paths:
           application/json:
             schema:
               type: object
-              required: [policies]
+              required:
+              - policies
               properties:
                 policies:
                   type: array
                   items:
-                    $ref: "#/components/schemas/PolicyRow"
+                    $ref: '#/components/schemas/PolicyRow'
       responses:
-        "200":
-          description: Updated policies.
-  /ddm/change-requests:
-    get:
-      summary: List change requests
-      responses:
-        "200":
-          description: Change requests.
+        '200':
+          description: Successful response.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ChangeRequest"
+                  $ref: '#/components/schemas/PolicyRow'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
+  /ddm/change-requests:
+    get:
+      summary: List change requests
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
     post:
       summary: Create a change request
       requestBody:
@@ -301,59 +534,171 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateChangeRequest"
+              $ref: '#/components/schemas/CreateChangeRequest'
       responses:
-        "201":
-          description: Created change request.
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/change-requests/accessible:
     get:
       summary: List change requests accessible to the authenticated user
       responses:
-        "200":
-          description: Accessible change requests.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/change-requests/{id}:
     get:
       summary: Get a change request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Change request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     patch:
       summary: Update a change request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateChangeRequest"
+              $ref: '#/components/schemas/UpdateChangeRequest'
       responses:
-        "200":
-          description: Updated change request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/change-requests/{id}/approve:
     patch:
       summary: Approve a change request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Approved change request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/change-requests/{id}/reject:
     patch:
       summary: Reject a change request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Rejected change request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/inventory/vms:
     get:
       summary: List virtual machines
       responses:
-        "200":
-          description: Virtual machines.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
     post:
       summary: Create a virtual machine
       requestBody:
@@ -361,10 +706,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VirtualMachineInput"
+              $ref: '#/components/schemas/VirtualMachineInput'
       responses:
-        "201":
-          description: Created virtual machine.
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/inventory/vms/sync:
     post:
       summary: Sync virtual machines from inventory records
@@ -374,69 +735,181 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vms]
               properties:
-                vms:
+                servers:
                   type: array
                   items:
-                    $ref: "#/components/schemas/VirtualMachineInput"
+                    $ref: '#/components/schemas/SyncVirtualMachine'
+              required:
+              - servers
       responses:
-        "200":
-          description: Sync result.
+        '400':
+          $ref: '#/components/responses/Error'
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                  updated:
+                    type: integer
+                  unchanged:
+                    type: integer
+                required:
+                - created
+                - updated
+                - unchanged
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/inventory/vms/{id}:
     get:
       summary: Get a virtual machine
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Virtual machine.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     patch:
       summary: Update a virtual machine
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/VirtualMachineInput"
+              $ref: '#/components/schemas/UpdateVirtualMachine'
       responses:
-        "200":
-          description: Updated virtual machine.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Delete a virtual machine
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Deleted virtual machine.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                required:
+                - deleted
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/inventory/vms/{id}/tags:
     patch:
       summary: Replace virtual machine tags
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [tags]
+              required:
+              - tags
               properties:
                 tags:
                   type: array
                   items:
                     type: string
       responses:
-        "200":
-          description: Updated tags.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/inventory/change-requests:
     get:
       summary: List inventory change requests
       responses:
-        "200":
-          description: Inventory change requests.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
     post:
       summary: Create an inventory change request
       requestBody:
@@ -444,41 +917,119 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/InventoryChangeRequestInput'
       responses:
-        "201":
-          description: Created inventory change request.
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/inventory/change-requests/{id}:
     get:
       summary: Get an inventory change request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Inventory change request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/inventory/change-requests/{id}/approve:
     patch:
       summary: Approve an inventory change request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Approved inventory change request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/inventory/change-requests/{id}/reject:
     patch:
       summary: Reject an inventory change request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Rejected inventory change request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryChangeRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/implementer-groups:
     get:
       summary: List implementer groups
       responses:
-        "200":
-          description: Implementer groups.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImplementerGroup'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
     post:
       summary: Create an implementer group
       requestBody:
@@ -486,66 +1037,177 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ImplementerGroupInput"
+              $ref: '#/components/schemas/ImplementerGroupInput'
       responses:
-        "201":
-          description: Created implementer group.
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImplementerGroup'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/implementer-groups/{id}:
     get:
       summary: Get an implementer group
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Implementer group.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImplementerGroup'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     patch:
       summary: Update an implementer group
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ImplementerGroupInput"
+              $ref: '#/components/schemas/UpdateImplementerGroup'
       responses:
-        "200":
-          description: Updated implementer group.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImplementerGroup'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Delete an implementer group
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Deleted implementer group.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                - success
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/implementer-groups/{id}/members:
     get:
       summary: List implementer group members
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Group members.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupMember'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/implementer-groups/{id}/members/{username}:
     delete:
       summary: Remove an implementer group member
       parameters:
-        - $ref: "#/components/parameters/Id"
-        - $ref: "#/components/parameters/Username"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Username'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Member removed.
+        '200':
+          description: Member removed; empty response body.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/implementer-groups/membership-requests:
     get:
       summary: List implementer group membership requests
       parameters:
-        - name: status
-          in: query
-          schema:
-            type: string
+      - name: status
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Membership requests.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MembershipRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
     post:
       summary: Create a membership request
       requestBody:
@@ -553,167 +1215,258 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/MembershipRequestInput'
       responses:
-        "201":
-          description: Created membership request.
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/implementer-groups/membership-requests/{id}/approve:
     patch:
       summary: Approve a membership request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Approved membership request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/implementer-groups/membership-requests/{id}/reject:
     patch:
       summary: Reject a membership request
       parameters:
-        - $ref: "#/components/parameters/Id"
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Rejected membership request.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/implementer-groups/accessible-vms:
     get:
       summary: List VMs accessible to the authenticated implementer
       responses:
-        "200":
-          description: Accessible VMs.
-  /ddm/sessions/start:
-    post:
-      summary: Start a terminal session through the gateway
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [hostId, crId]
-              properties:
-                hostId:
-                  type: string
-                crId:
-                  type: string
-                connectionType:
-                  type: string
-                  enum: [ssh]
-      responses:
-        "201":
-          description: Gateway session token and WebSocket URL.
-  /ddm/sessions/active:
-    get:
-      summary: List active sessions
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessibleAssets'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
       parameters:
-        - name: hostId
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Active sessions.
-  /ddm/sessions/mine:
-    get:
-      summary: List sessions owned by the authenticated user
-      responses:
-        "200":
-          description: User sessions.
-  /ddm/sessions/{id}:
-    get:
-      summary: Get a recorded webapp session
-      parameters:
-        - $ref: "#/components/parameters/Id"
-      responses:
-        "200":
-          description: Session record.
-  /ddm/sessions/{id}/token:
-    get:
-      summary: Get a fresh session token for a recorded session
-      parameters:
-        - $ref: "#/components/parameters/Id"
-      responses:
-        "200":
-          description: Fresh session token and WebSocket URL.
-  /ddm/sessions/{id}/end:
-    patch:
-      summary: Mark a recorded session ended
-      parameters:
-        - $ref: "#/components/parameters/Id"
-      responses:
-        "200":
-          description: Ended session.
-  /ddm/sessions/{id}/disconnect:
-    patch:
-      summary: Mark a recorded session disconnected
-      parameters:
-        - $ref: "#/components/parameters/Id"
-      responses:
-        "200":
-          description: Disconnected session.
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/monitoring/status:
     get:
       summary: Get monitoring status
       responses:
-        "200":
-          description: Status summary.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringStatus'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/monitoring/alarms:
     get:
       summary: List CloudWatch alarms
       responses:
-        "200":
-          description: Alarms.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlarmSummary'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
   /ddm/monitoring/metrics:
     get:
       summary: Query CloudWatch metrics
       parameters:
-        - name: metric
-          in: query
-          schema:
-            type: string
-            default: RequestCount
-        - name: namespace
-          in: query
-          schema:
-            type: string
-        - name: hours
-          in: query
-          schema:
-            type: string
-            default: "24"
-        - name: period
-          in: query
-          schema:
-            type: string
-            default: "3600"
+      - name: metric
+        in: query
+        schema:
+          type: string
+          default: RequestCount
+      - name: namespace
+        in: query
+        schema:
+          type: string
+      - name: hours
+        in: query
+        schema:
+          type: string
+          default: '24'
+      - name: period
+        in: query
+        schema:
+          type: string
+          default: '3600'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Metric data.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricSummary'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/monitoring/logs/app:
     get:
       summary: Query application logs
       parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Filter"
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Filter'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Log events.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/monitoring/logs/sessions:
     get:
       summary: Query session logs
       parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Filter"
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Filter'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Session log events.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/monitoring/alerts:
     get:
       summary: List alert events
       parameters:
-        - $ref: "#/components/parameters/Limit"
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
-          description: Alert events.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/monitoring/alerts/webhook:
     post:
       summary: Public SNS alert webhook
@@ -726,137 +1479,264 @@ paths:
               type: object
               additionalProperties: true
       responses:
-        "200":
-          description: Webhook accepted.
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  id:
+                    type: string
+                    format: uuid
+                required:
+                - message
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: x-amz-sns-message-type
+        in: header
+        required: false
+        schema:
+          type: string
+          enum:
+          - SubscriptionConfirmation
+          - Notification
+          - UnsubscribeConfirmation
   /ddm/session-audit/sessions:
     get:
       summary: List sessions with retained command/output audit
       parameters:
-        - name: sessionId
-          in: query
-          schema:
-            type: string
-        - name: userId
-          in: query
-          schema:
-            type: string
-        - name: hostId
-          in: query
-          schema:
-            type: string
-        - name: crId
-          in: query
-          schema:
-            type: string
-        - name: from
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: to
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: limit
-          in: query
-          schema:
-            type: string
-            default: "50"
-        - name: cursor
-          in: query
-          schema:
-            type: string
+      - name: sessionId
+        in: query
+        schema:
+          type: string
+      - name: userId
+        in: query
+        schema:
+          type: string
+      - name: hostId
+        in: query
+        schema:
+          type: string
+      - name: crId
+        in: query
+        schema:
+          type: string
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        schema:
+          type: string
+          default: '50'
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
+        '200':
           description: Audited sessions.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListAuditSessionsResponse"
+                $ref: '#/components/schemas/ListAuditSessionsResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/session-audit/sessions/{id}/records:
     get:
       summary: List retained command/output audit records for a session
       parameters:
-        - $ref: "#/components/parameters/Id"
-        - name: limit
-          in: query
-          schema:
-            type: string
-            default: "500"
-        - name: cursor
-          in: query
-          schema:
-            type: string
+      - $ref: '#/components/parameters/Id'
+      - name: limit
+        in: query
+        schema:
+          type: string
+          default: '500'
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
+        '200':
           description: Session audit records.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListSessionAuditRecordsResponse"
+                $ref: '#/components/schemas/ListSessionAuditRecordsResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /ddm/audit/events:
     get:
       summary: List sanitized platform lifecycle metadata events
       parameters:
-        - name: eventType
-          in: query
-          schema:
-            type: string
-        - name: source
-          in: query
-          schema:
-            type: string
-        - name: userId
-          in: query
-          schema:
-            type: string
-        - name: sessionId
-          in: query
-          schema:
-            type: string
-        - name: hostId
-          in: query
-          schema:
-            type: string
-        - name: crId
-          in: query
-          schema:
-            type: string
-        - name: incidentId
-          in: query
-          schema:
-            type: string
-        - name: runId
-          in: query
-          schema:
-            type: string
-        - name: from
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: to
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: limit
-          in: query
-          schema:
-            type: string
-            default: "100"
-        - name: cursor
-          in: query
-          schema:
-            type: string
+      - name: eventType
+        in: query
+        schema:
+          type: string
+      - name: source
+        in: query
+        schema:
+          type: string
+      - name: userId
+        in: query
+        schema:
+          type: string
+      - name: sessionId
+        in: query
+        schema:
+          type: string
+      - name: hostId
+        in: query
+        schema:
+          type: string
+      - name: crId
+        in: query
+        schema:
+          type: string
+      - name: incidentId
+        in: query
+        schema:
+          type: string
+      - name: runId
+        in: query
+        schema:
+          type: string
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        schema:
+          type: string
+          default: '100'
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/APIVersion'
       responses:
-        "200":
+        '200':
           description: Sanitized lifecycle events.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListMetadataEventsResponse"
+                $ref: '#/components/schemas/ListMetadataEventsResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /openapi.yaml:
+    get:
+      summary: Checked-in OpenAPI specification
+      responses:
+        '200':
+          description: Exact api/openapi.yaml bytes.
+          content:
+            application/yaml:
+              schema:
+                type: string
+      security: []
+  /ddm/session-audit/records:
+    get:
+      summary: Query retained records across sessions
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: string
+          default: '500'
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/APIVersion'
+      - name: sessionId
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Session audit records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSessionAuditRecordsResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /ddm:
+    get:
+      summary: Service greeting
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/APIVersion'
+      responses:
+        '200':
+          description: Service greeting.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     albSession:
@@ -866,6 +1746,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+      description: Local AUTH_MODE=dev only; production uses the ALB session cookie and verified injected identity.
   parameters:
     Id:
       name: id
@@ -884,16 +1765,27 @@ components:
       in: query
       schema:
         type: string
-        default: "100"
+        default: '100'
     Filter:
       name: filter
       in: query
       schema:
         type: string
+    APIVersion:
+      name: x-api-version
+      in: header
+      required: true
+      schema:
+        type: string
+        enum:
+        - '1'
+      description: Required on business endpoints. Missing or unsupported values return 400.
   schemas:
     ProbeResponse:
       type: object
-      required: [status, service]
+      required:
+      - status
+      - service
       properties:
         status:
           type: string
@@ -902,7 +1794,6 @@ components:
           example: ddm
     AuthUser:
       type: object
-      additionalProperties: true
       properties:
         sub:
           type: string
@@ -910,31 +1801,62 @@ components:
           type: string
         email:
           type: string
+        name:
+          type: string
         roles:
           type: array
           items:
             type: string
+      required:
+      - sub
+      - username
+      - roles
     User:
       type: object
-      additionalProperties: true
+      properties:
+        username:
+          type: string
+        sub:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        status:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+      required:
+      - username
+      - enabled
+      - status
+      - roles
     CreateUserRequest:
       type: object
-      required: [username]
-      additionalProperties: true
       properties:
         username:
           type: string
         email:
           type: string
-        temporaryPassword:
+        name:
           type: string
         roles:
           type: array
           items:
             type: string
+      required:
+      - username
+      - email
+      - roles
     PolicyRow:
       type: object
-      required: [role, permissions]
+      required:
+      - role
+      - permissions
       properties:
         role:
           type: string
@@ -944,7 +1866,17 @@ components:
             type: string
     AuditSessionSummary:
       type: object
-      required: [sessionId, userId, hostId, crId, connectionType, status, createdAt, lastAuditAt, recordCount, truncated]
+      required:
+      - sessionId
+      - userId
+      - hostId
+      - crId
+      - connectionType
+      - status
+      - createdAt
+      - lastAuditAt
+      - recordCount
+      - truncated
       properties:
         sessionId:
           type: string
@@ -970,17 +1902,27 @@ components:
           type: boolean
     ListAuditSessionsResponse:
       type: object
-      required: [sessions]
+      required:
+      - sessions
       properties:
         sessions:
           type: array
           items:
-            $ref: "#/components/schemas/AuditSessionSummary"
+            $ref: '#/components/schemas/AuditSessionSummary'
         nextCursor:
           type: string
     SessionAuditRecord:
       type: object
-      required: [sessionId, userId, hostId, crId, recordType, sequence, createdAt, truncated, byteCount]
+      required:
+      - sessionId
+      - userId
+      - hostId
+      - crId
+      - recordType
+      - sequence
+      - createdAt
+      - truncated
+      - byteCount
       properties:
         sessionId:
           type: string
@@ -992,7 +1934,11 @@ components:
           type: string
         recordType:
           type: string
-          enum: [command, output, control, session_event]
+          enum:
+          - command
+          - output
+          - control
+          - session_event
         sequence:
           type: integer
           format: int64
@@ -1012,17 +1958,23 @@ components:
           type: integer
     ListSessionAuditRecordsResponse:
       type: object
-      required: [records]
+      required:
+      - records
       properties:
         records:
           type: array
           items:
-            $ref: "#/components/schemas/SessionAuditRecord"
+            $ref: '#/components/schemas/SessionAuditRecord'
         nextCursor:
           type: string
     MetadataEvent:
       type: object
-      required: [schemaVersion, eventId, eventType, source, occurredAt]
+      required:
+      - schemaVersion
+      - eventId
+      - eventType
+      - source
+      - occurredAt
       properties:
         schemaVersion:
           type: string
@@ -1065,62 +2017,833 @@ components:
           type: string
     ListMetadataEventsResponse:
       type: object
-      required: [events]
+      required:
+      - events
       properties:
         events:
           type: array
           items:
-            $ref: "#/components/schemas/MetadataEvent"
+            $ref: '#/components/schemas/MetadataEvent'
         nextCursor:
           type: string
     ChangeRequest:
       type: object
-      additionalProperties: true
-    CreateChangeRequest:
-      type: object
-      additionalProperties: true
       properties:
         title:
           type: string
         description:
           type: string
+        approvalRoute:
+          type: string
+        comments:
+          type:
+          - string
+          - 'null'
+        activities:
+          type: array
+          items:
+            type: string
         vmIds:
           type: array
           items:
             type: string
+            format: uuid
+        allowedRoles:
+          type: array
+          items:
+            type: string
+        implementerGroupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
         implementationStartAt:
           type: string
           format: date-time
         implementationEndAt:
           type: string
           format: date-time
+        id:
+          type: string
+          format: uuid
+        requester:
+          type: string
+        status:
+          type: string
+          enum:
+          - Pending
+          - Approved
+          - Rejected
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        approver:
+          type:
+          - string
+          - 'null'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEntry'
+      required:
+      - id
+      - title
+      - description
+      - approvalRoute
+      - requester
+      - status
+      - createdAt
+      - updatedAt
+      - activities
+      - vmIds
+      - allowedRoles
+      - implementerGroupIds
+      - implementationStartAt
+      - implementationEndAt
+      - history
+    CreateChangeRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        approvalRoute:
+          type: string
+        comments:
+          type: string
+        activities:
+          type: array
+          items:
+            type: string
+        vmIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        allowedRoles:
+          type: array
+          items:
+            type: string
+        implementerGroupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        implementationStartAt:
+          type: string
+          format: date-time
+        implementationEndAt:
+          type: string
+          format: date-time
+      required:
+      - title
+      - description
+      - approvalRoute
+      - implementationStartAt
+      - implementationEndAt
     UpdateChangeRequest:
       type: object
-      additionalProperties: true
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        approvalRoute:
+          type: string
+        comments:
+          type: string
+        activities:
+          type: array
+          items:
+            type: string
+        vmIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        allowedRoles:
+          type: array
+          items:
+            type: string
+        implementerGroupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        implementationStartAt:
+          type: string
+          format: date-time
+        implementationEndAt:
+          type: string
+          format: date-time
+      required: []
     VirtualMachineInput:
       type: object
-      additionalProperties: true
       properties:
         hostname:
           type: string
         ipAddress:
           type: string
-        tags:
-          type: array
-          items:
-            type: string
+        assetStatus:
+          type: string
+          enum:
+          - Active
+          - Inactive
+          - Maintenance
+          - Retired
+        osVersion:
+          type: string
+        sshPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+      required:
+      - hostname
+      - ipAddress
+      - osVersion
     ImplementerGroupInput:
       type: object
-      additionalProperties: true
       properties:
         name:
           type: string
         description:
           type: string
+        osUsers:
+          type: array
+          items:
+            type: string
         vmIds:
           type: array
           items:
             type: string
+            format: uuid
+      required:
+      - name
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+      - status
+    ErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          oneOf:
+          - type: string
+          - type: array
+            items:
+              type: string
+        error:
+          type: string
+      required:
+      - statusCode
+      - message
+    CurrentUser:
+      type: object
+      properties:
+        sub:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required:
+      - sub
+      - username
+      - roles
+      - permissions
+    AuthConfig:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - alb
+          - dev
+        devUsers:
+          type: array
+          items:
+            type: object
+            properties:
+              username:
+                type: string
+              name:
+                type: string
+              roles:
+                type: array
+                items:
+                  type: string
+            required:
+            - username
+            - name
+            - roles
+      required:
+      - mode
+      - devUsers
+    DevLoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/AuthUser'
+      required:
+      - accessToken
+      - user
+    IdentityRoles:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required:
+      - roles
+      - permissions
+    HistoryEntry:
+      type: object
+      properties:
+        when:
+          type: string
+        actor:
+          type: string
+        action:
+          type: string
+        note:
+          type: string
+      required:
+      - when
+      - actor
+      - action
+      - note
+    UpdateVirtualMachine:
+      type: object
+      properties:
+        hostname:
+          type: string
+        ipAddress:
+          type: string
+        assetStatus:
+          type: string
+          enum:
+          - Active
+          - Inactive
+          - Maintenance
+          - Retired
+        osVersion:
+          type: string
+        sshPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+      required: []
+    SyncVirtualMachine:
+      type: object
+      properties:
+        hostname:
+          type: string
+        ipAddress:
+          type: string
+        assetStatus:
+          type: string
+          enum:
+          - Active
+          - Inactive
+          - Maintenance
+          - Retired
+        osVersion:
+          type: string
+        sshPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+      - hostname
+      - ipAddress
+      - osVersion
+    VirtualMachine:
+      type: object
+      properties:
+        hostname:
+          type: string
+        ipAddress:
+          type: string
+        assetStatus:
+          type: string
+          enum:
+          - Active
+          - Inactive
+          - Maintenance
+          - Retired
+        osVersion:
+          type: string
+        sshPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        tags:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - hostname
+      - ipAddress
+      - assetStatus
+      - osVersion
+      - sshPort
+      - tags
+      - id
+      - createdAt
+      - updatedAt
+    InventoryChangeRequestInput:
+      type: object
+      properties:
+        hostname:
+          type: string
+        ipAddress:
+          type: string
+        assetStatus:
+          type: string
+          enum:
+          - Active
+          - Inactive
+          - Maintenance
+          - Retired
+        osVersion:
+          type: string
+        sshPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        action:
+          type: string
+          enum:
+          - Add
+          - Update
+        targetVmId:
+          type: string
+          format: uuid
+        comments:
+          type: string
+      required:
+      - action
+      - hostname
+      - ipAddress
+      - osVersion
+    InventoryChangeRequest:
+      type: object
+      properties:
+        hostname:
+          type: string
+        ipAddress:
+          type: string
+        assetStatus:
+          type: string
+          enum:
+          - Active
+          - Inactive
+          - Maintenance
+          - Retired
+        osVersion:
+          type: string
+        sshPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        action:
+          type: string
+          enum:
+          - Add
+          - Update
+        targetVmId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        comments:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+          format: uuid
+        requester:
+          type: string
+        status:
+          type: string
+          enum:
+          - Pending
+          - Approved
+          - Rejected
+        approver:
+          type:
+          - string
+          - 'null'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEntry'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - action
+      - requester
+      - status
+      - hostname
+      - ipAddress
+      - assetStatus
+      - osVersion
+      - sshPort
+      - history
+      - createdAt
+      - updatedAt
+    UpdateImplementerGroup:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        osUsers:
+          type: array
+          items:
+            type: string
+        vmIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required: []
+    ImplementerGroup:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type:
+          - string
+          - 'null'
+        osUsers:
+          type: array
+          items:
+            type: string
+        vmIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - name
+      - osUsers
+      - vmIds
+      - createdAt
+      - updatedAt
+    MembershipRequestInput:
+      type: object
+      properties:
+        username:
+          type: string
+        implementerGroupId:
+          type: string
+          format: uuid
+        requester:
+          type: string
+        comments:
+          type: string
+      required:
+      - username
+      - implementerGroupId
+      - requester
+    MembershipRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        implementerGroupId:
+          type: string
+          format: uuid
+        requester:
+          type: string
+        comments:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - Pending
+          - Approved
+          - Rejected
+        approver:
+          type:
+          - string
+          - 'null'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEntry'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - username
+      - implementerGroupId
+      - requester
+      - status
+      - history
+      - createdAt
+      - updatedAt
+    GroupMember:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        implementerGroupId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - username
+      - implementerGroupId
+      - createdAt
+      - updatedAt
+    AccessibleAssets:
+      type: object
+      properties:
+        implementerGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImplementerGroup'
+        osUsers:
+          type: array
+          items:
+            type: string
+        vms:
+          type: array
+          items:
+            $ref: '#/components/schemas/VirtualMachine'
+      required:
+      - implementerGroups
+      - osUsers
+      - vms
+    AlarmSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        state:
+          type: string
+          enum:
+          - ALARM
+          - OK
+          - INSUFFICIENT_DATA
+        description:
+          type: string
+        metric:
+          type: string
+        namespace:
+          type: string
+        threshold:
+          type: number
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - name
+      - state
+      - metric
+      - namespace
+      - updatedAt
+    MetricSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        namespace:
+          type: string
+        unit:
+          type: string
+        dataPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              value:
+                type: number
+            required:
+            - timestamp
+            - value
+        current:
+          type: number
+      required:
+      - name
+      - namespace
+      - unit
+      - dataPoints
+    LogEvent:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        message:
+          type: string
+        logStream:
+          type: string
+      required:
+      - timestamp
+      - message
+      - logStream
+    MonitoringCacheStatus:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum:
+          - redis
+        enabled:
+          type: boolean
+        available:
+          type: boolean
+        ttlSeconds:
+          type: integer
+      required:
+      - provider
+      - enabled
+      - available
+      - ttlSeconds
+    MonitoringStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        region:
+          type: string
+        logGroup:
+          type: string
+        sessionLogGroup:
+          type: string
+        awsAuthorized:
+          type: boolean
+        authorizationHint:
+          type: string
+        cache:
+          $ref: '#/components/schemas/MonitoringCacheStatus'
+      required:
+      - configured
+      - cache
+    AlertEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        alarmName:
+          type: string
+        state:
+          type: string
+        metric:
+          type: string
+        source:
+          type: string
+        triggeredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type:
+          - string
+          - 'null'
+        rawPayload:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+      required:
+      - id
+      - alarmName
+      - state
+      - metric
+      - source
+      - triggeredAt
+      - createdAt
+  responses:
+    Error:
+      description: Invalid request, authorization denial, or service failure; the HTTP status identifies the category.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
 security:
-  - albSession: []
-  - bearerAuth: []
+- albSession: []
+- bearerAuth: []

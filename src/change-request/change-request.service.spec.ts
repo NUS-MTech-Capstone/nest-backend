@@ -276,7 +276,7 @@ describe('ChangeRequestService', () => {
     it('rejects an end datetime that is not after start during update', async () => {
       const cr = makeCr();
       changeRequestModel.findByPk.mockResolvedValue(cr);
-      const start = futureStart();
+      const start = cr.implementationStartAt.toISOString();
       await expect(
         service.update('cr-1', { implementationEndAt: start }),
       ).rejects.toThrow(UnprocessableEntityException);
