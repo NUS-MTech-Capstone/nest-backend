@@ -19,18 +19,13 @@ describe('database config', () => {
     process.env.DB_PASSWORD = 'secret';
     process.env.DB_NAME = 'ddm_webapp';
 
-    expect(buildSequelizeOptions()).toEqual(
-      // Local development may disable TLS; production and migrations set DB_SSL=true.
-      // nosemgrep: javascript.sequelize.security.audit.sequelize-enforce-tls.sequelize-enforce-tls
-      expect.objectContaining({
-        dialect: 'postgres',
-        host: 'db.local',
-        port: 5433,
-        username: 'ddm',
-        password: 'secret',
-        database: 'ddm_webapp',
-      }),
-    );
+    const options = buildSequelizeOptions();
+    expect(options.dialect).toBe('postgres');
+    expect(options.host).toBe('db.local');
+    expect(options.port).toBe(5433);
+    expect(options.username).toBe('ddm');
+    expect(options.password).toBe('secret');
+    expect(options.database).toBe('ddm_webapp');
   });
 
   it('uses DATABASE_URL in nest database config', () => {

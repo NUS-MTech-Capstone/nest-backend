@@ -6,8 +6,10 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "audit:prod": "node scripts/audit-production.mjs npm-audit.json",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "pretest": "npm run test:audit-policy",
     "start": "nest start",
     "start:dev": "cross-env NODE_ENV=development nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -21,7 +23,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:audit-policy": "node --test scripts/audit-policy.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1070.0",
@@ -56,6 +59,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.0.0",
     "@types/supertest": "^7.0.0",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
     "cross-env": "^10.1.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
@@ -70,12 +75,12 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0"
+    "typescript-eslint": "^8.20.0",
+    "yaml": "2.8.1"
   },
   "overrides": {
     "brace-expansion@1": "1.1.21",
     "fflate": "0.8.3",
-    "multer": "2.3.0",
     "qs": "6.16.0",
     "uuid": "11.1.1"
   },

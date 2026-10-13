@@ -7,8 +7,13 @@ on:
 
 jobs:
   ci:
-    uses: NUS-MTech-Capstone/github-actions-shared/.github/workflows/node-ci.yaml@main
+    uses: NUS-MTech-Capstone/github-actions-shared/.github/workflows/node-ci.yaml@0a2ab816ffd50e835f0d3553343f544f59f4b41b
     with:
-      node-version: "22"
+      node-version: '22'
       test-command: npm test -- --runInBand --coverage --watchman=false
       build-command: npm run build
+      sca-command: npm run audit:prod
+      sca-artifact-path: npm-audit.json
+
+  openapi:
+    uses: NUS-MTech-Capstone/github-actions-shared/.github/workflows/openapi-ci.yaml@0a2ab816ffd50e835f0d3553343f544f59f4b41b
