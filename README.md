@@ -3,7 +3,7 @@
 NestJS APIs for change requests, inventory, access policy, memberships, and
 Cognito user administration.
 
-In the Phase 1 baseline, this backend owns authenticated web application data
+This backend owns authenticated web application data
 APIs, STS inventory/change-request lookups, Cognito administration, readiness,
 and CloudWatch monitoring views. It does not proxy terminal streams or issue
 session tokens.
@@ -74,19 +74,10 @@ configuration that does not enable database TLS.
 
 ### Dependency security
 
-CI fails on high-severity production dependency findings. A moderate advisory,
-`GHSA-w5hq-g745-h8pq`, remains through Sequelize 6.37.8's required `uuid` 8.x
-dependency because the supported Nest Sequelize adapter requires Sequelize 6
-and upstream has no compatible patched release. Sequelize's current call sites
-use UUID v1 and v4; the advisory affects the v3, v5, and v6 APIs only when a
-caller supplies an output buffer. Keep this residual risk under review and
-remove the exception when the supported Sequelize dependency chain is patched.
-
-Apply migrations before starting the backend locally or in production:
-
-```bash
-npm run migrate
-```
+`npm run audit:prod` checks production dependencies against the reviewed
+[audit policy](scripts/audit-policy.mjs) and retains the native findings in
+`npm-audit.json`. `npm run test:audit-policy` verifies enforcement, including
+the expiry of reviewed exceptions. High and critical findings fail CI.
 
 ## Database Migrations
 
@@ -140,14 +131,9 @@ returns `hostIds: []`, which STS denies. STS requires an explicit role match for
 ordinary actors; Admin bypasses role matching only. Access-tab visibility is
 not authorization: STS independently checks approval, window, groups, and scope.
 
-Roll out this additive response before Proxy Control Plane's verified actor-group
-forwarding and STS enforcement. Existing database fields are reused; no migration
-is required for this contract. The HTTP contract fixture is tested in
+The wire contract is tested in
 `src/change-request/sts-change-request.controller.spec.ts` and consumed by the
-optional Proxy Control Plane cross-repository integration test.
-
-The change-request endpoint returns the approval status and gateway host IDs
-derived from the CR's scoped VM IDs.
+Proxy Control Plane cross-repository integration test.
 
 ## Session audit facade
 
@@ -267,32 +253,12 @@ That Redis pod is a disposable optimization. NetworkPolicy restricts access to
 Nest Backend, and a restart, suspension, or reschedule may discard all cached
 values without affecting durable application state.
 
-## API Specification
+## API contract and CI
 
-The OpenAPI contract is checked in at `api/openapi.yaml` and is served
-unauthenticated outside the `/ddm` prefix at:
+[OpenAPI contract](api/openapi.yaml), served byte-for-byte at `GET /openapi.yaml`.
+CI validates it with `openapi-spec-validator==0.9.0`; handler tests check success,
+error and API-version responses. Update the specification alongside handler changes.
 
-```http
-GET /openapi.yaml
-```
-
-## API contract verification
-
-`api/openapi.yaml` is the checked-in HTTP contract, served byte-for-byte at
-`GET /openapi.yaml`. CI validates it with `openapi-spec-validator==0.9.0`.
-Handler tests validate representative success and error responses against its
-schemas, including missing and unsupported API versions. Business HTTP calls
-require `x-api-version: 1`; the specification declares route exemptions and
-any transport-specific alternatives. Run the repository test suite when
-changing handlers or response models, and update the contract in the same PR.
-
-The Image workflow runs only after successful CI for a push to `main`. It builds
-the tested source SHA, retains that SHA as a traceability tag, and promotes the
-build's `sha256` digest through a Kubernetes PR. Promotion requires the digest;
-Argo CD deploys that immutable reference after the GitOps PR is merged.
-
-`npm run audit:prod` retains native npm findings and counts in `npm-audit.json`.
-The exact moderate Umzug CLI advisory chain has a documented review deadline of
-2026-11-07; an expired exception, changed severity, additional advisory, malformed
-report or scanner failure fails CI. No high or critical production finding is
-accepted by this policy. `npm run test:audit-policy` verifies these decisions.
+After successful `main` CI, the Image workflow builds the tested source SHA
+and opens a Kubernetes promotion PR with its immutable image digest. Argo CD
+deploys after that PR is merged; the commit tag provides source traceability.
