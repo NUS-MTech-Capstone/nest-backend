@@ -8,6 +8,8 @@ describe('runtime config validation', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.DB_SSL;
+    delete process.env.DB_SSL_REJECT_UNAUTHORIZED;
     delete process.env.REDIS_CACHE_ENABLED;
     delete process.env.REDIS_URL;
     delete process.env.MONITORING_CACHE_TTL_SECONDS;
@@ -26,6 +28,7 @@ describe('runtime config validation', () => {
 
   it('requires DATABASE_URL for production migrations', () => {
     process.env.NODE_ENV = 'production';
+    process.env.DB_SSL = 'true';
     delete process.env.DATABASE_URL;
 
     expect(() => validateMigrationConfig()).toThrow(
@@ -33,9 +36,35 @@ describe('runtime config validation', () => {
     );
   });
 
+  it.each([undefined, 'false'])(
+    'requires DB_SSL=true for production migrations when DB_SSL=%s',
+    (dbSsl) => {
+      process.env.NODE_ENV = 'production';
+      process.env.DATABASE_URL = 'postgres://example';
+      if (dbSsl === undefined) {
+        delete process.env.DB_SSL;
+      } else {
+        process.env.DB_SSL = dbSsl;
+      }
+
+      expect(() => validateMigrationConfig()).toThrow(
+        'DB_SSL=true is required in production',
+      );
+    },
+  );
+
+  it('allows production migrations with DATABASE_URL and DB_SSL=true', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = 'postgres://example';
+    process.env.DB_SSL = 'true';
+
+    expect(() => validateMigrationConfig()).not.toThrow();
+  });
+
   it('requires alb auth settings in production', () => {
     process.env.NODE_ENV = 'production';
     process.env.DATABASE_URL = 'postgres://example';
+    process.env.DB_SSL = 'true';
     process.env.AUTH_MODE = 'dev';
 
     expect(() => validateRuntimeConfig()).toThrow(
@@ -46,6 +75,7 @@ describe('runtime config validation', () => {
   it('reports missing alb configuration keys in production', () => {
     process.env.NODE_ENV = 'production';
     process.env.DATABASE_URL = 'postgres://example';
+    process.env.DB_SSL = 'true';
     process.env.AUTH_MODE = 'alb';
     delete process.env.AWS_REGION;
 

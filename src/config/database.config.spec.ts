@@ -6,6 +6,8 @@ describe('database config', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
     delete process.env.DATABASE_URL;
+    delete process.env.DB_SSL;
+    delete process.env.DB_SSL_REJECT_UNAUTHORIZED;
   });
 
   afterEach(() => {
@@ -20,12 +22,14 @@ describe('database config', () => {
     process.env.DB_NAME = 'ddm_webapp';
 
     const options = buildSequelizeOptions();
+
     expect(options.dialect).toBe('postgres');
     expect(options.host).toBe('db.local');
     expect(options.port).toBe(5433);
     expect(options.username).toBe('ddm');
     expect(options.password).toBe('secret');
     expect(options.database).toBe('ddm_webapp');
+    expect(options.dialectOptions).toBeUndefined();
   });
 
   it('uses DATABASE_URL in nest database config', () => {

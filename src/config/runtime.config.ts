@@ -13,6 +13,9 @@ export function validateMigrationConfig(): void {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is required in production');
   }
+  if (process.env.DB_SSL !== 'true') {
+    throw new Error('DB_SSL=true is required in production');
+  }
 }
 
 export function validateRuntimeConfig(): void {
