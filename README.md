@@ -68,7 +68,9 @@ npm run build
 ```
 
 Use `.env.example` as the configuration reference. Local development may use
-the individual `DB_*` settings. Production must use `DATABASE_URL`.
+the individual `DB_*` settings. Production must use `DATABASE_URL` and set
+`DB_SSL=true`; application startup and migrations reject production
+configuration that does not enable database TLS.
 
 ### Dependency security
 
